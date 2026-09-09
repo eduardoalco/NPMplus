@@ -1,16 +1,13 @@
 import cn from "clsx";
-import type { ReactNode } from "react";
+import type { ButtonHTMLAttributes, ReactNode } from "react";
 
-interface Props {
+interface Props extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "color"> {
 	children: ReactNode;
-	className?: string;
-	type?: "button" | "submit";
 	actionType?: "primary" | "secondary" | "success" | "warning" | "danger" | "info" | "light" | "dark";
 	variant?: "ghost" | "outline" | "pill" | "square" | "action";
 	size?: "sm" | "md" | "lg" | "xl";
 	fullWidth?: boolean;
 	isLoading?: boolean;
-	disabled?: boolean;
 	color?:
 		| "blue"
 		| "azure"
@@ -24,13 +21,11 @@ interface Props {
 		| "green"
 		| "teal"
 		| "cyan";
-	onClick?: () => void;
 }
 function Button({
 	children,
 	className,
-	onClick,
-	type,
+	type = "button",
 	actionType,
 	variant,
 	size,
@@ -38,11 +33,8 @@ function Button({
 	fullWidth,
 	isLoading,
 	disabled,
+	...buttonProps
 }: Props) {
-	const myOnClick = () => {
-		if (!isLoading) onClick?.();
-	};
-
 	const cns = cn(
 		"btn",
 		className,
@@ -55,7 +47,13 @@ function Button({
 	);
 
 	return (
-		<button type={type || "button"} className={cns} onClick={myOnClick} disabled={disabled}>
+		<button
+			{...buttonProps}
+			type={type}
+			className={cns}
+			disabled={disabled || isLoading}
+			aria-busy={isLoading || undefined}
+		>
 			{children}
 		</button>
 	);

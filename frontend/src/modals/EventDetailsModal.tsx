@@ -55,7 +55,7 @@ const EventDetailsModal = EasyModal.create(({ id, visible, remove }: Props) => {
 						</div>
 					</Modal.Body>
 					<Modal.Footer>
-						<Button data-bs-dismiss="modal" onClick={remove}>
+						<Button type="button" onClick={remove}>
 							<T id="action.close" />
 						</Button>
 					</Modal.Footer>

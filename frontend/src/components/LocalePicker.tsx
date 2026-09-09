@@ -20,10 +20,18 @@ function LocalePicker({ menuAlign = "start" }: Props) {
 
 	const classes = ["btn", "dropdown-toggle", "btn-sm", styles.btn];
 	const cns = cn(...classes, getTheme() === "dark" ? "btn-ghost-dark" : "btn-ghost-light");
+	const currentLocaleName = localeList[locale ?? "en"]?.name ?? "English";
 
 	return (
 		<div className="dropdown">
-			<button type="button" className={cns} data-bs-toggle="dropdown">
+			<button
+				type="button"
+				className={cns}
+				data-bs-toggle="dropdown"
+				aria-expanded="false"
+				aria-label={`Select language. Current language: ${currentLocaleName}`}
+				title={currentLocaleName}
+			>
 				<Flag countryCode={getFlagCodeForLocale(locale)} />
 			</button>
 			<div
@@ -35,8 +43,10 @@ function LocalePicker({ menuAlign = "start" }: Props) {
 				{localeOptions.map((item) => (
 					<button
 						type="button"
-						className="dropdown-item"
+						className={cn("dropdown-item", item === locale && "active")}
 						key={item}
+						lang={item}
+						aria-current={item === locale ? "true" : undefined}
 						onClick={() => {
 							changeTo(item);
 						}}

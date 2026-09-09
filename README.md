@@ -1,191 +1,137 @@
 # NPMplus
 
-If you don't need the web GUI of NPMplus, you may also have a look at caddy: https://caddyserver.com
+NPMplus es un gestor de proxies inversos con interfaz web, HTTPS automático y una compilación reforzada de nginx. Este fork publica sus imágenes en [`docker.io/eduardoalco/npmplus`](https://hub.docker.com/r/eduardoalco/npmplus); el proyecto upstream y su soporte comunitario siguen siendo [`ZoeyVid/NPMplus`](https://github.com/ZoeyVid/NPMplus).
 
-- [Compatibility (to Upstream)](#compatibility-to-upstream)
-- [Quick Setup](#quick-setup)
-- [Architecture](#architecture)
-- [Production deployment](#production-deployment)
-- [Migration from upstream/vanilla nginx-proxy-manager](#migration-from-upstreamvanilla-nginx-proxy-manager)
+El despliegue incluido usa el proyecto Compose `npmplus` y levanta siempre cinco contenedores separados: `npmplus`, `crowdsec`, `npmplus-anubis`, `npmplus-geoipupdate` y `npmplus-caddy`. No hay perfiles.
 
-**Note: this fork is distributed under the GNU Affero General Public License version 3 or any later version. It is based on the MIT licensed [nginx-proxy-manager](https://github.com/NginxProxyManager/nginx-proxy-manager).** <br>
-**Note: by running NPMplus you agree to the ToS of Let's Encrypt/your custom CA.** <br>
-**Note: remember to expose udp/quic for the https port (443/udp).** <br>
-**Note: remember to add your domain to the [hsts preload list](https://hstspreload.org) if you enabled hsts for your domain.** <br>
-**Note: please report issues first to this fork before reporting them to the upstream repository.** <br>
+- [Inicio rápido](#inicio-rápido)
+- [Requisitos](#requisitos)
+- [Arquitectura](#arquitectura)
+- [Puertos y red](#puertos-y-red)
+- [Servicios integrados](#servicios-integrados)
+- [Persistencia y copias de seguridad](#persistencia-y-copias-de-seguridad)
+- [Actualización y rollback](#actualización-y-rollback)
+- [Diagnóstico](#diagnóstico)
+- [Configuración avanzada](#configuración-avanzada)
+- [Seguridad](#seguridad)
+- [Migración](#migración-desde-nginx-proxy-manager)
+- [Soporte y upstream](#soporte-y-upstream)
 
-## List of some changes
+> Este software se distribuye bajo GNU AGPL v3 o posterior y deriva de [nginx-proxy-manager](https://github.com/NginxProxyManager/nginx-proxy-manager), publicado bajo licencia MIT. Al usar ACME se aceptan las condiciones de Let's Encrypt o de la CA configurada.
 
-- HTTP/3 (QUIC), needs https exposed over udp
-- crowdsec (and appsec) support
-- hardened TLS by default:
-  - patched nginx build with aws-lc compiled form source
-  - enforced cipher/curve order, certificate compression (zlib-ng+brotli)
-  - optional encrypted client hello (ech)
-- shortlived letsencrypt certificates by default, plus proper support for other acme servers
-- mTLS with client certificates per host
-- more ways to serve a host: grpc, proxy protocol, loadbalancing over multiple upstreams, and serving files or php directly with fancyindex support
-- built-in auth_request support for the common auth providers, no advanced config needed
-- OIDC login for the web UI
-- multiple access lists per host and per location
-- security headers always sent, fingerprinting headers stripped, based on the OWASP secure headers project
-- hardened web UI itself: https, strict CSP, httpOnly cookie instead of local storage, rate limits and more
-- opt-in logging
-- zstd and brotli compression in addition to gzip
-- Goaccess log analytics (/goaccess) and a Swagger UI (/api/docs) for the api, both in the web UI
-- password/mfa reset (only sqlite): `docker exec -it npmplus password-reset.js USER_EMAIL [PASSWORD] [--disable-mfa]`
-- alpine based, much smaller image
-- punycode domain support
-- option to replace custom certs
-- many other things, see this README.md and the compose.yaml
+## Inicio rápido
 
-## Compatibility (to Upstream)
-- Supported architectures: x86_64-v2/amd64v2 (check with `/lib/ld-linux-x86-64.so.2 --help`, plain x86-64 is not supported only v2 and up) and aarch64/arm64 (other archs (including 64-bit ones) and any 32-bit arch (like armhf/armv7 (dropped), armel/armv6) are not supported, because of the duration to compile).
-- I test NPMplus with docker, but podman should also work (I disrecommend you to run the NPMplus container inside an LXC container, it will work, but please don't do it, it will work better without, install docker/podman on the host or in a KVM and run NPMplus with this)
-- MariaDB(/MySQL)/PostgreSQL may work as Databases for NPMplus (configuration like in upstream), but are unsupported, have no advantage over SQLite (at least with NPMplus) and are not recommended. Please note that you can't migrate from any of these to SQLite without making a fresh install and/or copying everything yourself.
-- NPMplus uses https instead of http for the admin interface
-- NPMplus won't trust cloudflare until you set the env TRUST_CLOUDFLARE to true, but please read [this](#notes-on-cloudflare) first before setting the env to true.
-- route53 is not supported as dns-challenge provider and Amazon CloudFront IPs can't be automatically trusted in NPMplus, even if you set TRUST_CLOUDFLARE env to true.
-- The following certbot dns plugins have been replaced, which means that certs using one of these proivder will not renew and need to be recreated (not renewed): `certbot-dns-he`, `certbot-dns-dnspod`, `certbot-dns-online`, `certbot-dns-powerdns` and `certbot-dns-do` (`certbot-dns-do` was replaced in upstream with v2.12.4 and then merged into NPMplus)
-- There are many changed and improvements to the nginx config, so please don't follow guides in the internet about custom/advanced config, they are either redundant or should not be used at all with NPMplus
-- Many forms have changed behavior, see [Comments on some buttons](#comments-on-some-buttons)
+Desde la raíz de una copia de este repositorio:
 
-## Quick Setup
-1. Install Docker and Docker Compose (podman or docker rootless may also work)
-- [Docker Install documentation](https://docs.docker.com/engine/install)
-- [Docker Compose Install documentation](https://docs.docker.com/compose/install/linux)
-2. Download this [compose.yaml](https://raw.githubusercontent.com/eduardoalco/NPMplus/refs/heads/develop/compose.yaml) (or use its content as a portainer stack)
-3. Adjust TZ to match your Timezone and maybe adjust other env options to your needs
-4. Start NPMplus by running (or deploy your portainer stack)
-```bash
-docker compose up -d
-```
-5. Log in to the Admin UI: When your docker container is running, connect to the admin interface using `https://` on port `81`.
+1. Cree la configuración local:
 
-## Architecture
+   ```bash
+   cp .env.example .env
+   ```
 
-NPMplus is distributed as one main container. `dinit` supervises the Node.js API, the custom nginx build, Certbot jobs, log rotation, and optional GoAccess/PHP-FPM processes. The React/Vite frontend is built into the image and served by nginx. Runtime state, the SQLite database, certificates, generated nginx configuration, logs, and custom files live below `/data`, which the Compose file persists at `/opt/npmplus` by default.
+2. Edite `.env`. Como mínimo, revise `TZ` y las rutas persistentes. Mantenga `LOGROTATE=true`, `AUTH_REQUEST_ANUBIS_UPSTREAM=http://127.0.0.1:8923` y `DISABLE_HTTP=true`: CrowdSec, Anubis y Caddy forman parte del stack predeterminado.
 
-The main service uses the Linux host network so it can preserve client addresses, expose TCP 80/443, UDP 443 for HTTP/3, and reach loopback-only integrations. Its default listeners are:
+3. Cree los secretos de MaxMind. Sustituya los valores de ejemplo por las credenciales de una cuenta [GeoLite2](https://www.maxmind.com/en/geolite2/signup):
 
-| Listener | Purpose |
-| --- | --- |
-| `80/tcp` | HTTP, redirects, and ACME HTTP-01 challenges |
-| `443/tcp` | HTTPS proxy hosts and streams |
-| `443/udp` | HTTP/3/QUIC |
-| `81/tcp` | HTTPS administration UI and API |
+   ```bash
+   install -d -m 700 secrets
+   printf '%s' 'YOUR_ACCOUNT_ID' > secrets/maxmind_account_id
+   printf '%s' 'YOUR_LICENSE_KEY' > secrets/maxmind_license_key
+   chmod 600 secrets/maxmind_account_id secrets/maxmind_license_key
+   ```
 
-Optional services use the named `npmplus-auxiliary` bridge network. CrowdSec LAPI/AppSec and Anubis are published only on `127.0.0.1`, so the host-networked NPMplus container can reach them without exposing those APIs externally. GeoIP Update shares only the GeoIP database directory. Caddy is the exception: when enabled, it intentionally owns public TCP port 80 and redirects every request to HTTPS.
+4. Levante todo el stack con un único comando:
 
-SQLite is the supported and recommended database. External MySQL/MariaDB/PostgreSQL deployments are not included because they add operational complexity without an advantage for NPMplus and are not officially supported by this fork.
+   ```bash
+   docker compose up -d
+   ```
 
-## Production deployment
+5. Abra la administración en `https://<host>:81`. Si no definió `INITIAL_ADMIN_EMAIL` e `INITIAL_ADMIN_PASSWORD`, consulte los logs de `npmplus` para obtener las credenciales iniciales generadas.
 
-### Prepare the host
+## Requisitos
 
-Use a Linux host with Docker Engine and the current Docker Compose plugin. Ensure TCP ports 80, 81, and 443 plus UDP port 443 are available and allowed by the firewall. Then prepare the configuration:
+- Host Linux con [Docker Engine](https://docs.docker.com/engine/install/) y el plugin [Docker Compose](https://docs.docker.com/compose/install/linux/).
+- Arquitectura `amd64` con nivel x86-64-v2 o superior, o `arm64`.
+- Puertos libres y permitidos por el firewall: `80/tcp`, `443/tcp`, `443/udp` y `81/tcp`.
+- Credenciales MaxMind GeoLite2 guardadas en los dos archivos indicados arriba.
+- DNS público apuntando al host. Con Caddy ocupando el puerto 80, use DNS challenge para certificados cuando HTTP-01 no sea aplicable.
 
-```bash
-curl -O https://raw.githubusercontent.com/eduardoalco/NPMplus/refs/heads/develop/compose.yaml
-curl -O https://raw.githubusercontent.com/eduardoalco/NPMplus/refs/heads/develop/.env.example
-mkdir -p deployment/crowdsec deployment/anubis
-curl -o deployment/crowdsec/acquis.yaml https://raw.githubusercontent.com/eduardoalco/NPMplus/refs/heads/develop/deployment/crowdsec/acquis.yaml
-curl -o deployment/anubis/botPolicies.yaml https://raw.githubusercontent.com/eduardoalco/NPMplus/refs/heads/develop/deployment/anubis/botPolicies.yaml
-cp .env.example .env
-chmod 600 .env
-```
+Docker es la plataforma probada. Podman puede funcionar, pero no es el objetivo principal de este despliegue. SQLite es la base de datos soportada y recomendada; MySQL/MariaDB/PostgreSQL no forman parte del stack ni reciben soporte en este fork.
 
-A repository checkout already contains the versioned `deployment/` configs. They are harmless when no optional profile is active and required by the CrowdSec and Anubis profiles.
+## Arquitectura
 
-Edit `.env` before starting. `TZ` and `NPMPLUS_DATA_DIR` are the main settings. The default data paths are designed for host backups:
+Compose declara `name: npmplus` y coordina cinco servicios en un único stack:
 
-| Data | Default host path | Required backup |
+| Contenedor | Responsabilidad | Aislamiento y datos compartidos |
 | --- | --- | --- |
-| NPMplus state, SQLite, certificates, logs | `/opt/npmplus` | Yes |
-| CrowdSec configuration and credentials | `/opt/crowdsec/conf` | If CrowdSec is enabled |
-| CrowdSec database | `/opt/crowdsec/data` | If CrowdSec is enabled |
-| Local Compose secrets | `./secrets` | If GeoIP Update is enabled |
+| `npmplus` | UI React/Vite, API Node.js, nginx, Certbot, SQLite y tareas internas supervisadas por `dinit` | Usa la red del host y persiste `/data` |
+| `crowdsec` | Security Engine, LAPI y AppSec | Red bridge auxiliar; sólo lee los logs de nginx |
+| `npmplus-anubis` | Desafíos anti-bot mediante `auth_request` | Red bridge auxiliar; endpoint publicado sólo en loopback |
+| `npmplus-geoipupdate` | Actualización periódica de GeoLite2 | Red bridge auxiliar; comparte únicamente el directorio GeoIP y recibe secretos como archivos |
+| `npmplus-caddy` | Redirección HTTP global y permanente hacia HTTPS | Red bridge auxiliar; es el único propietario del puerto público 80 |
 
-Validate and start the core service:
+Todos pertenecen al mismo stack para simplificar el ciclo de vida, pero **no están fusionados en un contenedor monolítico**. La separación limita privilegios, montajes y superficie de ataque por función; los servicios auxiliares usan `cap_drop: ALL` cuando es posible y `no-new-privileges`.
 
-```bash
-docker compose config --quiet
-docker compose pull
-docker compose up -d
-docker compose ps
-```
+## Puertos y red
 
-The image contains a healthcheck for the API. Do not place the admin UI directly on the public internet without an appropriate firewall, VPN, or access policy.
+`npmplus` usa `network_mode: host`; no se le deben añadir `ports` ni una red bridge. Como `DISABLE_HTTP=true`, no escucha en 80. Sus listeners son:
 
-### Optional profiles
-
-The base command starts only NPMplus. Optional services are activated explicitly:
-
-| Profile | Service | Prerequisite |
+| Puerto | Propietario | Uso |
 | --- | --- | --- |
-| `crowdsec` | CrowdSec Security Engine, LAPI, and AppSec listener | Set `LOGROTATE=true` |
-| `anubis` | Anubis bot challenge in subrequest mode | Set `AUTH_REQUEST_ANUBIS_UPSTREAM=http://127.0.0.1:8923` |
-| `geoip` | Periodic MaxMind GeoLite2 updates | Create both MaxMind secret files |
-| `caddy` | Strict catch-all HTTP-to-HTTPS redirect | Set `DISABLE_HTTP=true` so port 80 is free |
+| `80/tcp` | `npmplus-caddy` | Redirección HTTP a HTTPS |
+| `443/tcp` | `npmplus` | HTTPS para proxy hosts y streams |
+| `443/udp` | `npmplus` | HTTP/3 sobre QUIC |
+| `81/tcp` | `npmplus` | UI y API administrativas mediante HTTPS |
+| `127.0.0.1:8080/tcp` | `crowdsec` | LAPI |
+| `127.0.0.1:7422/tcp` | `crowdsec` | AppSec |
+| `127.0.0.1:8923/tcp` | `npmplus-anubis` | Subrequests de autenticación |
 
-Run one or several profiles:
+Los tres puertos auxiliares se publican sólo en loopback. NPMplus puede alcanzarlos porque comparte la red del host, pero no quedan expuestos directamente a la red externa.
 
-```bash
-docker compose --profile crowdsec up -d
-docker compose --profile anubis --profile geoip up -d
-docker compose --profile crowdsec --profile anubis --profile geoip --profile caddy up -d
-```
+## Servicios integrados
 
-Profiles do not change NPMplus settings automatically. Put the prerequisites in `.env` before deployment. This keeps the base installation backward compatible and prevents enabling logging, third-party services, or public listeners unexpectedly.
+### CrowdSec y bouncer
 
-#### CrowdSec and AppSec
+CrowdSec carga la colección `ZoeyVid/npmplus`, lee en modo sólo lectura los logs definidos por `deployment/crowdsec/acquis.yaml` y expone LAPI/AppSec únicamente en `127.0.0.1`. `LOGROTATE=true` es necesario para producir los logs consumidos por CrowdSec.
 
-The profile installs the `ZoeyVid/npmplus` collection, reads NPMplus logs through the read-only acquisition in `deployment/crowdsec/acquis.yaml`, and binds LAPI/AppSec to host loopback. After the first start, create the NPMplus bouncer credential:
+Tras el primer arranque, cree la credencial del bouncer:
 
 ```bash
 docker compose exec crowdsec cscli bouncers add npmplus
 ```
 
-Copy the generated key into `/opt/npmplus/crowdsec/crowdsec.conf`, set `ENABLED` to `true`, and redeploy NPMplus. The Security Engine detects decisions but does not enforce them until the NPMplus bouncer is enabled. See the dedicated [CrowdSec](#crowdsec) guide below for policy and privacy details.
+Copie la clave mostrada a `/opt/npmplus/crowdsec/crowdsec.conf` —o bajo el valor configurado en `NPMPLUS_DATA_DIR`—, establezca `ENABLED` en `true`, asigne la clave a `API_KEY` y vuelva a aplicar el stack. Sin este paso CrowdSec detecta decisiones, pero NPMplus no las ejecuta.
 
-#### Anubis
+CrowdSec puede compartir señales con su servicio central. Revise la [configuración de sharing](https://docs.crowdsec.net/docs/next/configuration/crowdsec_configuration/#sharing), los [metadatos enviados](https://docs.crowdsec.net/docs/central_api/intro/#signal-meta-data) y, si procede, el [firewall bouncer](https://docs.crowdsec.net/u/bouncers/firewall). AppSec fuerza buffering de las solicitudes protegidas.
 
-The profile uses Anubis `v1.27.0` and the versioned policy in `deployment/anubis/botPolicies.yaml`. That policy keeps the upstream defaults but returns `401` for challenges and `403` for denials, as required by nginx `auth_request`. After setting the upstream in `.env`, select `Anubis` in each proxy host that should use it. No custom nginx location is needed.
+### Anubis
 
-#### GeoIP Update
+Anubis se ejecuta en modo subrequest con la política versionada `deployment/anubis/botPolicies.yaml`. La política devuelve `401` para desafío y `403` para denegación, valores requeridos por nginx `auth_request`. Para usarlo, seleccione **Anubis** en cada proxy host o ubicación; no necesita una location nginx personalizada.
 
-Create a free MaxMind account and place the account ID and license key in separate files. Do not commit them:
+### GeoIP Update
 
-```bash
-install -d -m 700 secrets
-printf '%s' 'YOUR_ACCOUNT_ID' > secrets/maxmind_account_id
-printf '%s' 'YOUR_LICENSE_KEY' > secrets/maxmind_license_key
-chmod 600 secrets/maxmind_account_id secrets/maxmind_license_key
-docker compose --profile geoip up -d
-```
+`npmplus-geoipupdate` actualiza `GeoLite2-Country`, `GeoLite2-City` y `GeoLite2-ASN` cada 24 horas de forma predeterminada. Las bases se guardan bajo `${NPMPLUS_DATA_DIR}/goaccess/geoip`.
 
-Set `GOA=true` to use the databases in GoAccess, or set `NGINX_LOAD_GEOIP2_MODULE=true` and add the custom nginx rules described in the [geoblocking example](#geoblocking-example-mainly-community-support). Compose secrets are mounted files; with local Compose they are not an encrypted secret store, so protect the host files and backups.
+- Active `GOA=true` para que GoAccess las consuma.
+- Active `NGINX_LOAD_GEOIP2_MODULE=true` para reglas GeoIP2 personalizadas.
+- Los secretos de Compose son archivos montados, no un almacén cifrado: mantenga permisos `600`, exclúyalos del control de versiones y proteja sus backups.
 
-#### Strict HTTP redirect with Caddy
+### Caddy y desafíos DNS
 
-Set `DISABLE_HTTP=true`, then start the profile:
+`npmplus-caddy` publica `80/tcp` y sólo redirige a HTTPS. NPMplus conserva `443/tcp`, `443/udp` y `81/tcp`. Como NPMplus tiene HTTP desactivado, la validación ACME HTTP-01 puede no ser viable; en ese caso seleccione **DNS Challenge** al crear el certificado en la UI.
 
-```bash
-docker compose --profile caddy up -d
-```
+Para Azure DNS, la definición integrada usa `certbot-dns-azure==2.6.1` con dependencias fijadas y `--no-deps`, incluida exactamente `azure-mgmt-dns==8.2.0` junto con `azure-core==1.41.0` y `azure-identity==1.25.3`. La identidad debe tener el rol **DNS Zone Contributor** y las credenciales deben incluir al menos un mapeo `dns_azure_zoneN` entre zona y resource group, según la plantilla mostrada por la UI. No actualice sólo una de esas dependencias sin validar el conjunto.
 
-NPMplus continues to own HTTPS and the admin UI. Caddy owns TCP port 80 and performs only a catch-all permanent redirect. Because NPMplus no longer serves HTTP, ACME HTTP-01 challenges may not work; use a DNS challenge where required.
+## Persistencia y copias de seguridad
 
-### Updates, rollback, and backups
+| Contenido | Ruta predeterminada del host |
+| --- | --- |
+| Estado NPMplus, SQLite, certificados, configuración generada y logs | `/opt/npmplus` |
+| Configuración y credenciales CrowdSec | `/opt/crowdsec/conf` |
+| Base de datos CrowdSec | `/opt/crowdsec/data` |
+| Credenciales MaxMind | `./secrets` |
 
-The external auxiliary images use pinned versions and digests while the first-party NPMplus channels retain their existing rolling tags. Review release notes and update pinned references deliberately. Repeat only the profiles used by your deployment; for example:
-
-```bash
-docker compose --profile crowdsec --profile anubis pull
-docker compose --profile crowdsec --profile anubis up -d --remove-orphans
-```
-
-For reproducible rollback, record or locally pin the resolved digest of the rolling `npmplus:latest` and `npmplus:caddy` images before updating. For a consistent SQLite backup, stop NPMplus before copying its data directory and make `DATA_DIR` match `NPMPLUS_DATA_DIR` from `.env`:
+Las rutas pueden cambiarse en `.env`. Para obtener una copia coherente de SQLite, detenga `npmplus`, archive su directorio y vuelva a aplicar el stack:
 
 ```bash
 DATA_DIR=/opt/npmplus
@@ -194,298 +140,98 @@ tar -C "$(dirname "$DATA_DIR")" -czf "npmplus-backup-$(date +%F).tar.gz" "$(base
 docker compose up -d
 ```
 
-Also back up the CrowdSec directories and local secret files when those profiles are in use. Test restoration on a separate host before relying on a backup. To roll back, restore the data backup and redeploy the recorded image references.
+Incluya también los dos directorios de CrowdSec y, con protección equivalente, los secretos locales. Pruebe periódicamente la restauración en otro host. La posesión de una copia no sustituye la verificación de que SQLite, certificados y configuración arrancan correctamente.
 
-## Migration from upstream/vanilla nginx-proxy-manager
-- **NOTE: Migrating back to the original version is not possible.** Please make a **backup** before migrating, so you have the option to revert if needed
-1. Please read [this](#compatibility-to-upstream) first
-2. make a backup of your data and letsencrypt folders (creating a copy using `cp -a` should be enough)
-3. download the latest compose.yaml of NPMplus
-4. adjust your paths (of /etc/letsencrypt and /data) to the ones you used with nginx-proxy-manager
-5. adjust TZ to match your Timezone and maybe adjust other env options to your needs
-6. stop nginx-proxy-manager
-7. deploy the NPMplus compose.yaml
-8. You should now remove the `/etc/letsencrypt` mount, since it was moved to `/data` while migration, then redeploy the compose file
-9. Since many forms have changed, please check if they are still correct for every host you have.
-10. If you proxy NPM(plus) through NPM(plus) make sure to change the scheme from http to https
-11. Because of a added CSP-rules gravatar images will not load, to fix this you need to open the form to edit a users name and save it without changes
-12. Maybe setup crowdsec (see below)
-13. Please report all (migration) issues you may have
+## Actualización y rollback
 
-# Crowdsec
-<!--Note: Using Immich behind NPMplus with enabled appsec causes issues, see here: [#1241](https://github.com/ZoeyVid/NPMplus/discussions/1241) <br>-->
-Note: If you don't [disable sharing in crowdsec](https://docs.crowdsec.net/docs/next/configuration/crowdsec_configuration/#sharing), you may need to mention that [this](https://docs.crowdsec.net/docs/central_api/intro/#signal-meta-data) is sent to crowdsec in your privacy policy.
-1. Install crowdsec and the ZoeyVid/npmplus collection for example by using crowdsec container at the end of the compose.yaml, you may also want to install [this](https://app.crowdsec.net/hub/author/crowdsecurity/collections/http-dos), but be warned of false positives
-2. Set LOGROTATE to `true` in your `compose.yaml` and redeploy
-3. Open `/opt/crowdsec/conf/acquis.d/npmplus.yaml` (path may be different depending how you installed crowdsec) and fill it with:
-```yaml
-filenames:
-  - /opt/npmplus/nginx/logs/*.log
-labels:
-  type: npmplus
----
-listen_addr: 0.0.0.0:7422
-appsec_config: crowdsecurity/appsec-default
-name: appsec
-source: appsec
-labels:
-  type: appsec
-```
-4. Make sure to use `network_mode: host` in your compose file for the NPMplus container
-5. Run `docker exec crowdsec cscli bouncers add npmplus` and save the api key of the output
-6. Open `/opt/npmplus/crowdsec/crowdsec.conf`
-7. Set `ENABLED` to `true`
-8. Use the output of step 5 as `API_KEY`
-9. Save the file
-10. Redeploy the `compose.yaml`
-11. It is recommended to block at the earliest possible point, so if possible set up a firewall bouncer: https://docs.crowdsec.net/u/bouncers/firewall, make sure to also include the docker iptables in the firewall bouncer config
-12. Note that when using crowdsec requests will always be buffered, so setting `proxy_(request_)buffering` to off will not work
+Las imágenes auxiliares externas están fijadas por versión y digest. Las imágenes propias `docker.io/eduardoalco/npmplus:latest` y `docker.io/eduardoalco/npmplus:caddy` son canales móviles.
 
-## Use of external php-fpm (recommended)
-To set it per location: press the gear button, set the scheme to `path`, put in the path and paste the following in the new text field at the bottom, you need to adjust the last line:
-```
-location ~* [^/]\.php(?:$|/) {
-  fastcgi_split_path_info ^(.*\.php)(/.*)$;
-  try_files $fastcgi_script_name =404;
-  fastcgi_pass ...; # set this to the address of your php-fpm (socket/tcp): https://nginx.org/en/docs/http/ngx_http_fastcgi_module.html#fastcgi_pass
-}
+Antes de actualizar:
+
+1. Haga una copia consistente de los datos.
+2. Registre los digests actualmente desplegados y conserve el `compose.yaml` usado.
+3. Revise las notas de la versión upstream y de este fork.
+
+Actualice las imágenes y reaplique el mismo stack, sin perfiles:
+
+```bash
+docker compose pull
+docker compose up -d
 ```
 
-## Use of inbuilt php-fpm (not recommended)
-1. First enable php inside your compose file (you can add more php extension using envs in the compose file)
-2. Set the forwarding port to the php version you want to use and is supported by NPMplus (like 83/84/85)
+Para rollback, restaure el backup compatible, recupere el `compose.yaml` previo o fije las imágenes propias a los digests registrados y ejecute de nuevo `docker compose up -d`. Restaurar sólo la imagen no revierte migraciones de datos.
 
-## Comments on some buttons
-- Forward Hostname / IP / Path: if the scheme is set to path you can just put here a path in and nginx works as a file server, otherwise you need to input ip/domain, you can also append a path to the ip/domain like `127.0.0.1/path` to proxy to a subpath.
-  - For custom locations with a set path, dns will be only refreshed on nginx reloads and the path of the location will be stripped. So a request `GET /cdf/abc` to a custom location `/cdf` which proxies to `127.0.0.1/abc` will proxy to `127.0.0.1/abc/abc`, a custom location `/cdf/` which proxies to `127.0.0.1/` will proxy to `127.0.0.1/abc`  and a custom location `/cdf` which proxies to `127.0.0.1` will proxy to `127.0.0.1/cdf/abc`
-  - If the scheme is set to `path`, a path ending with a `/` will be searched relative to the custom location (is uses nginx alias) and a path ending without a `/` will be searched relative to the main `/` location (it uses nginx root)
-- Forward Port (optional): port of upstream or php version if scheme is `path`
-- Send noindex header and block some user agents: This does what is says, it appends a header to all responses which says that the site should not be indexed while blocking requests of crawlers based on the user agent sent with the request
-- Disable Crowdsec Appsec: this will disable crowdsec appsec only for one host/one location, this will only do something if appsec is configured
-- Disable Response Buffering: Most time you want keep buffering enabled, you may want to disable this if you for example want to stream videos and you have a fast and stable connection to the upstream server, this effects the connection from the upstream server to NPMplus
-- Disable Request Buffering: Most time you want keep buffering enabled, request buffering will always be enabled if crowdsec appsec is enabled, you may want to disable this if you for example want to upload huge files and have a fast and stable connection to the upstream server, this effects the connection from the NPMplus to the upstream server
-- Enable compression by upstream: this will allow the backend to compress files, I recommend you to keep this disabled unless your backend provides precompressed assets, there may be cases where this is needed since otherwise the upstream missbehaves for some reason (like collabora in nextcloud all-in-one)
-- Enable fancyindex: this will enabled fancyindex, which shows a index of all files in the folder if there is no index file, only enable this if you know what you are doing and you need the index
-- Websockets: this button was removed, websockets are now always enabled
-- Reuse Key: this will make the new cert always keep its key unless you force renew it, I recommend you to keep this disabled (not to keep the key), a reason to keep the key would be TLSA/pubkey pinning
-- TLS to upstream (for Streams): This can be used if your stream target already uses tls but you want to override it with a NPMplus cert, do not enable if you don't set a new cert, since this will downgrade the connecting to be unencrypted
-- X-Frame-Options: will control the X-Frame-Options header, none will remove the header, SAMEORIGIN/DENY will set it to these values and upstream will keep what upstream sends
+## Diagnóstico
 
-## Examples of implementing some services using auth_request
-
-Note: The upstream URL for an auth request provider can be overridden in the UI; a main location's override takes precedence over any custom location's override.
-
-### Anubis
-1. Deploy an anubis container (see the compose.yaml for an example and information)
-2. In the mounted anubis bot policy file the "status_codes" should be set to 401 and 403, like this:
-```yaml
-status_codes:
-  CHALLENGE: 401
-  DENY: 403
+```bash
+docker compose config --quiet
+docker compose ps
+docker compose logs npmplus
+docker compose logs crowdsec anubis geoipupdate npmplus-caddy
 ```
-3. Set the AUTH_REQUEST_ANUBIS_UPSTREAM env in the NPMplus compose.yaml and select anubis in the Auth Request selection, no custom/advanced config/locations needed
-4. You can override the "allow", "checking" and "blocked" images used by default by putting put your custom images as happy.webp, pensive.webp and reject.webp to /opt/npmplus/anubis and restarting NPMplus
 
-### Tinyauth
-1. Set the AUTH_REQUEST_TINYAUTH_UPSTREAM env in the NPMplus compose.yaml and select tinyauth in the Auth Request selection, no custom/advanced config/locations needed
+- `config --quiet` valida interpolación, secretos, configs y sintaxis.
+- `ps` permite comprobar estado y healthchecks de los cinco contenedores.
+- Use `logs -f <servicio>` para seguimiento en tiempo real.
+- Si la UI no responde, confirme primero que `81/tcp` está permitido y que no existe otro proceso ocupándolo.
+- Si HTTP no redirige, revise `npmplus-caddy`; NPMplus no debe escuchar en 80 en este stack.
+- Si HTTP/3 falla, compruebe `443/udp`, firewall y NAT además de `443/tcp`.
 
-### OAuth2Proxy
-1. Set the AUTH_REQUEST_OAUTH2PROXY_UPSTREAM env in the NPMplus compose.yaml and select oauth2proxy in the Auth Request selection, no custom/advanced config/locations needed
+El error nginx `sendmsg() failed (109: Protocol not available)` está asociado a QUIC GSO en hosts o rutas de red que no lo soportan correctamente. Esta imagen lo mitiga con `quic_gso off`; HTTP/3 y QUIC continúan activos. No establezca `DISABLE_H3_QUIC=true` para esta incidencia, porque esa opción sí desactiva HTTP/3 por completo.
 
-### VoidAuth
-1. Set the AUTH_REQUEST_VOIDAUTH_UPSTREAM env in the NPMplus compose.yaml and select voidauth in the Auth Request selection, no custom/advanced config/locations needed
+## Configuración avanzada
 
-### Authelia (modern)
-1. Set the AUTH_REQUEST_AUTHELIA_UPSTREAM env in the NPMplus compose.yaml and select authelia (modern) in the Auth Request selection, no custom/advanced config/locations needed
+Mantenga las personalizaciones bajo `${NPMPLUS_DATA_DIR}/custom_nginx` y evite copiar recetas genéricas de nginx-proxy-manager: NPMplus genera una configuración diferente y muchas directivas habituales son redundantes o incompatibles.
 
-### Authentik (single application)
-1. Set the AUTH_REQUEST_AUTHENTIK_UPSTREAM env in the NPMplus compose.yaml and select authentik/authentik-send-basic-auth in the Auth Request selection, no custom/advanced config/locations needed
+### Proveedores `auth_request`
 
-## Load Balancing
-1. Open and edit this file: `/opt/npmplus/custom_nginx/http_top.conf` (or `/opt/npmplus/custom_nginx/stream_top.conf` for streams), if you changed /opt/npmplus to a different path make sure to change the path to fit
-2. Set the upstream directive(s) with your servers which should be load balanced (https://nginx.org/en/docs/http/ngx_http_upstream_module.html / https://nginx.org/en/docs/stream/ngx_stream_upstream_module.html), they need to run the same protocol (either http(s) or grpc(s) for proxy hosts or tcp/udp/proxy protocol for streams), like this for example:
-```
-upstream cu_mybackend {
-  zone cu_mybackend 128k;
-  server 127.0.0.1:44 resolve;
-  server 127.0.0.1:33 resolve;
-  server 127.0.0.1:22 resolve;
-  server 192.168.1.11:44 backup resolve;
-}
-```
-3. Configure your proxy host/stream like always in the UI, but set the hostname to the exact name of your upstream block (e.g. `cu_mybackend`) and leave the forward port field empty (ports are defined inside the upstream block)
-   - The `cu_` prefix (short for **c**ustom **u**pstream) is required: NPMplus uses it to detect that the hostname refers to a custom upstream block and skips generating its own upstream block for it
+Además de Anubis, NPMplus admite Tinyauth, OAuth2 Proxy, VoidAuth, Authelia y Authentik mediante sus variables `AUTH_REQUEST_*_UPSTREAM`. Defina la URL base en `.env` y seleccione el proveedor en la UI; el override de la ubicación principal prevalece sobre el de ubicaciones personalizadas.
 
-## Encrypted Client Hello (ECH)
+### Balanceo de carga
 
-- NPMplus supports generating and automatically rotating Encrypted Client Hello (ECH) keys. To enable and configure ECH, you need to set up a cron script that triggers the key generation and updates your DNS records.
-- When the container starts, it automatically creates an empty file at `/opt/npmplus/tls/ech/cron.sh`. You need to fill this file with a script to handle your ECH keys. 
-- If this file is not empty, NPMplus will automatically execute it regularly, enable ECH in the nginx configuration, and reload nginx after execution.
-- Inside your `cron.sh`, use the built-in `ech.sh` command to generate your keys. The syntax is: `ech.sh <public-name> <identifier> [max-name-length (default 64)]`.
-- This command generates the keys in `/opt/npmplus/tls/ech/` (saving the current and previous keys) and outputs the Base64-encoded ECH config list to standard output, which you can capture to update your DNS records.
-- Because ECH requires advertising your public key via an HTTPS DNS record, your `cron.sh` must push the newly generated config to your DNS provider. 
-- There is an example cron.sh script for Cloudflare in the repository: [`ech-cron-cloudflare-example.sh`](ech-cron-cloudflare-example.sh). You can adapt this script, add your API tokens, define your zones/records, and place its contents into `/opt/npmplus/tls/ech/cron.sh`.
-- By default, the container will run your `cron.sh` script and reload nginx on container start and then every hour after container start. You can change this interval by setting the `ECH_ROTATION_INTERVAL` environment variable in your `compose.yaml`.
-- I recommend you to use your servers hostname/PTR record as public name. The "identifier" is only used as part of the filename.
-- I recommend you to only use one ECH key shared for all your hosts. If you configure multiple ECH keys then only the one with the alphabetically first "identifier" will be used in the retry_configs response.
-- Do not set HTTPS records for FQDNs which use a CNAME record, but set them for the CNAME target, as only the HTTPS record of the CNAME target will be used by chromium.
-- Deleting/clearing the cron.sh will disable ECH
+Defina bloques `upstream` en `/opt/npmplus/custom_nginx/http_top.conf` o `stream_top.conf`, según corresponda. Consulte las directivas oficiales de nginx para [HTTP upstream](https://nginx.org/en/docs/http/ngx_http_upstream_module.html) y [stream upstream](https://nginx.org/en/docs/stream/ngx_stream_upstream_module.html). El nombre debe comenzar por `cu_`; úselo como hostname en la UI y deje vacío el puerto, ya que los destinos se declaran dentro del bloque.
 
-## Geoblocking example (mainly community support) 
+### Encrypted Client Hello
 
-1. set the `NGINX_LOAD_GEOIP2_MODULE` env to true and redeploy NPMplus
-2. deploy a geoipupdate container (see the compose.yaml for an example, create credentials [here](https://www.maxmind.com/en/geolite2/signup))
-3. open and edit this file: `/opt/npmplus/custom_nginx/http_top.conf`, if you changed /opt/npmplus to a different path make sure to change the path to fit
-```yaml
-geoip2 /data/goaccess/geoip/GeoLite2-Country.mmdb {
-  auto_reload 60m;
-  $geoip2_country_iso_code country iso_code;
-}
+NPMplus puede rotar claves ECH mediante `/opt/npmplus/tls/ech/cron.sh`. El comando interno es `ech.sh <public-name> <identifier> [max-name-length]`; el script debe publicar el valor generado como registro DNS HTTPS. Adapte el ejemplo versionado [`ech-cron-cloudflare-example.sh`](ech-cron-cloudflare-example.sh). Un archivo vacío desactiva ECH; `ECH_ROTATION_INTERVAL` controla el intervalo, una hora de forma predeterminada.
 
-# whitelist example, you can add as many country codes as you want, country code list: https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2#XY
-#map $geoip2_country_iso_code $geoip2_country_rule {
-#  default no;
-#  AA yes;
-#  XY yes;
-#  '' yes; # if you want to allow IPs with unknown country codes, if you don't do this make sure to allow private IPs
-#}
+### Listas de acceso y privacidad
 
-# blacklist example, you can add as many country codes as you want, country code list: https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2#XY
-#map $geoip2_country_iso_code $geoip2_country_rule {
-#  default yes;
-#  AA no;
-#  XY no;
-#  '' no; # if you want to block IPs with unknown country codes, if you do this make sure to allow private IPs
-#}
+Las reglas de una Access List se evalúan de arriba abajo. `Satisfy Any` y `Pass Auth to Upstream` sólo se aplican si están en la primera lista asignada al host o ubicación.
 
-# uncomment if you block/don't allow IPs with unknown country codes
-#geo $is_private_ip {
-#  default no;
-#  127.0.0.0/8 yes;
-#  10.0.0.0/8 yes;
-#  172.16.0.0/12 yes;
-#  192.168.0.0/16 yes;
-#  169.254.0.0/16 yes;
-#  ::1/128 yes;
-#  fc00::/7 yes;
-#  fec0::/10 yes;
-#}
-```  
-4a. to set it per location: press the gear button (on the tab itself, not the tab selection) on the details tab (or on the custom location you want to use), set your proxy settings and paste the following in the new text field at the bottom, you may want to adjust the last lines (do not use the advanced tab with this example as it may break cert renewals):
-```yaml
-# uncomment if you block/don't allow IPs with unknown country codes
-#if ($is_private_ip = yes) { 
-#  set $geoip2_country_rule yes; 
-#} 
-if ($geoip2_country_rule = no) { 
-  return 444; # this rejects the connection, but you can also return 403 to tell the client that it was denied
-} 
-```
-4b. to set it for an entire host: put this in the advanced tab:
-```yaml
-# uncomment if you block/don't allow IPs with unknown country codes
-#if ($is_private_ip = yes) { 
-#  set $geoip2_country_rule yes; 
-#}
-if ($request_uri ~* "^/\.well-known/acme-challenge/") {
-    set $geoip2_country_rule yes;
-}
-if ($geoip2_country_rule = no) { 
-  return 444; # this rejects the connection, but you can also return 403 to tell the client that it was denied
-} 
-```
-4c. to set it for all http hosts of them same type: put this in the `custom_nginx/server_proxy.conf` / `custom_nginx/server_redirect.conf` / `custom_nginx/server_dead.conf` file(s):
-```yaml
-# uncomment if you block/don't allow IPs with unknown country codes
-#if ($is_private_ip = yes) { 
-#  set $geoip2_country_rule yes; 
-#}
-if ($request_uri ~* "^/\.well-known/acme-challenge/") {
-    set $geoip2_country_rule yes;
-}
-if ($geoip2_country_rule = no) { 
-  return 444; # this rejects the connection, but you can also return 403 to tell the client that it was denied
-} 
-```
-4d. to set it for all http hosts: put this in the `custom_nginx/server_http.conf` file:
-```yaml
-# uncomment if you block/don't allow IPs with unknown country codes
-#if ($is_private_ip = yes) { 
-#  set $geoip2_country_rule yes; 
-#}
-if ($request_uri ~* "^/\.well-known/acme-challenge/") {
-    set $geoip2_country_rule yes;
-}
-if ($geoip2_country_rule = no) { 
-  return 444; # this rejects the connection, but you can also return 403 to tell the client that it was denied
-} 
-```
-5. you can create multiple rule lists by adding multiple map directive, but you need to use a unique name instead of `$geoip2_country_rule` for each rule list (you need the unique name also in the custom locations)
+Los logs pueden contener IP y otros datos personales. Documente su tratamiento si activa logs persistentes, CrowdSec, GoAccess, GeoIP, Anubis, PHP-FPM o integraciones externas. Si habilita HSTS, evalúe también la [lista preload](https://hstspreload.org).
 
-## Prerun scripts (EXPERT option) - if you don't know what this is, ignore it
-If you need to run scripts before NPMplus launches put them under: `/opt/npmplus/prerun/*.sh` (please add `#!/usr/bin/env sh` / `#!/usr/bin/env bash` to the top of the script) you need to create this folder yourself, also set the `ENABLE_PRERUN` env to `true`
+## Seguridad
 
-## Notes on Cloudflare
-- I strongly advise against using cloudflare proxy/tunnel before NPMplus (so between the users and NPMplus `users <=> cloudflare <=> NPMplus`)
-- Why?
-  - cloudflare acts like a "man in the middle" (if you want you can also call it a "wanted man-in-the-middle attack"), this means all traffic going from your users to you/from you to your users will be decrypted by cloudflare before being encrypted again and being forwarded to you/your users, if you want this is your decision (security, privacy, etc.)
-  - many optimizations done by NPMplus will because of this only be used between cloudflare and NPMplus, so your users won't notice them
-  - cloudflare overrides many things done/configured by NPMplus (like headers (including HSTS), HTTP/3 (QUIC), TLS settings and more), so you might need to configure them again in Cloudflare, but this is not always possible
-  - cloudflare has a limit of 100MB per connection, so uploading/downloading big files my cause problems, if no chunking is used
-  - because all data does not take direct way between your users and you, the connection time will increase
-  - cloudflare only forwards/protects http(s) traffic on port 80/443 to you, services running on other ports/different protocols are not forwarded/protected (STUN/TURN/SSH)
-  - cloudflare can't protect you if the attacker knows your real ip, as cloudflare only rewrites your dns entries to itself and then acts as a reverse proxy, direct ip connectings to you are not protected (use a firewall like ufw, make sure to allow 80/tcp and 443/tcp+udp for NPMplus, if possible don't open SSH and NPMplus GUI to the internet, but secure them behind a VPN like Wireguard)
-  - if you need a WAF => use [crowdsec](#crowdsec)
-  - if you want to use the "I'm under attack mode" to protect you from (ai) web scrapes => use [anubis](#anubis-config-supported)
-- What are reason for cloudflare?
-  - The points above don't matter you (enough) and:
-    - you depend on a not mentioned and unreplaceable feature of cloudflare
-    - or you are under (a) DDoS-attack(s), which you can't handle yourself and the attacker does not know your real ip/does not use it to attack you, but instead your domain: you could use cloudflare as dns nameserver for your domain with the proxy disabled and only enable it if you are under an attack (only work if the attacker did not cache your real ip)
-    - or you want to hide your IP and only expose http(s) services, but then: don't use NPMplus at all, install cloudflared and use cloudflare tunnels and point it directly to your upstreams, this way you can still manage everything in a GUI and you don't even need to expose any ports
-- If you still want to use cloudflare proxy make sure to set `your domain => SSL/TLS => SSL/TLS encryption => Current encryption mode => Configure` to "Full (strict)"
-- Just using cloudflare as a dns nameserver provider for your domain is fine
-- If you use cloudflare to forward mails to your inbox, note that cloudflare also acts as man-in-the-middle in this case
+- No publique `81/tcp` en Internet sin firewall, VPN o una política de acceso adecuada.
+- Permita públicamente sólo `80/tcp`, `443/tcp` y `443/udp`; los endpoints de CrowdSec y Anubis deben permanecer en loopback.
+- No añada privilegios ni montajes al Compose salvo que una función concreta lo requiera.
+- Mantenga `.env`, `secrets/` y backups fuera del repositorio y con permisos restrictivos.
+- Verifique TLS extremo a extremo si coloca otro CDN o proxy delante; un proxy externo puede reemplazar cabeceras, TLS y HTTP/3 configurados por NPMplus.
+- NPMplus no confía en rangos de Cloudflare salvo que se active explícitamente `TRUST_CLOUDFLARE`. Si usa su proxy, configure **Full (strict)** y proteja el acceso directo a la IP de origen.
 
-## Hints for Your Privacy Policy
-**Note: This is not legal advice. The following points are intended to give you hints and help you identify areas that may be relevant to your privacy policy. This list may not be complete or correct.**
-1. NPMplus **always** writes the nginx error logs to your Docker logs; it uses the error level “warn” (so every error nginx and the nginx modules mark as error level “warn” or higher will be logged), as it contains user information (like IPs) you should mention it in your privacy policy. With the default installation no user data should leave your system because of NPMplus (except for data sent to your backends, as this is the task of a reverse proxy), this should be the only data created by NPMplus containing user information by default.
-2. If you enable `LOGROTATE` the access and error (also level “warn”), logs will be written to your disk and rotated every 25 hours and deleted based on your set number of set rotations. The access logs use these formats: [http](https://github.com/ZoeyVid/NPMplus/blob/c6a2df722390eb3f4377c603e16587fe8c74e54f/rootfs/usr/local/nginx/conf/nginx.conf#L30) and [stream](https://github.com/ZoeyVid/NPMplus/blob/c6a2df722390eb3f4377c603e16587fe8c74e54f/rootfs/usr/local/nginx/conf/nginx.conf#L249). These include user information (like IPs), so make sure to also mention that these exist and what you are doing with them.
-3. If you use crowdsec, and you do **not** [disable sharing in crowdsec](https://docs.crowdsec.net/docs/next/configuration/crowdsec_configuration/#sharing), you need to mention that [this](https://docs.crowdsec.net/docs/central_api/intro/#signal-meta-data) is sent to crowdsec in your privacy policy.
-4. If you're blocking IPs — for example, using access lists, GeoIP filtering, or CrowdSec block lists — make sure to mention this as well.
-5. If GoAccess is enabled, it processes access logs to generate statistics, which are saved on disk for a time you can configure. These statistics include user information (like IPs), so make sure to also mention this.
-6. If you use the PHP-FPM option, error logs from PHP-FPM will also be written to Docker logs. These include user information (like IPs), so make sure to also mention this.
-7. If you collect any user information (like through other custom nginx modules, modules you can load via env, lua scripts, etc.), also mention it.
-8. If you use the caddy http to https redirect container, you should also mention the data collected by it, since it will also collect (error) logs.
-9. If use use anubis, see here: https://anubis.techaro.lol/docs/admin/configuration/impressum
-10. If you do any extra custom/advanced configuration/modification, which is in someway related to the users data, then yes, keep in mind to also mention this.
-11. Anything else you do with the users data, should also be mentioned. (Like what your backend does or any other proxies in front of NPMplus (like cloudflare, still not recommended), how data is stored, duration, ads, analytic tools, how data is handled if they contact you, by who/which provider, etc.)
-12. I don't think this needs to be mentioned, but you can include it if you want to be thorough (note: this does not apply if you're using Let's Encrypt, as they no longer support OCSP): Some clients (like Firefox) send OCSP requests to the certificate authority (CA) by default if the CA includes OCSP URLs in the certificate. This behavior can be disabled by users in Firefox. In my opinion, it doesn't need to be mentioned, as no data is sent to you — the client communicates directly with the CA. The check is initiated by the client itself; it's neither requested nor required by you. Your certificate simply indicates that the client can perform this check if it chooses to.
-13. Also optional and, in my opinion, not required: Some information about the data stored by the nameservers running your domain. I don't think this should be required, since in most cases there's a provider between the users and your nameserver acting as a proxy. This means the DNS requests of your users are hidden behind their provider. It’s the provider who should explain to their users how they handle data in their role as a "DNS proxy."
+## Migración desde nginx-proxy-manager
 
-## What connections can be expected from the NPMplus container?
-- to your clients
-- to your upstreams
-- to your acme/ocsp server
-- to github for a daily update check
-- if not disabled gravatar for profile pictures
-- if used to your OIDC
-- if used to pypi to download certbot plugins
-- if used to your dns provider for acme dns challenges
-- if used to www.site24x7.com for the reachability check
-- if enabled to cloudflare to download their IPs
-- if enabled to the crowdsec (container) lapi
-- if you see more/others please report them
+La migración de vuelta al proyecto original no está soportada. Conserve una copia completa que permita volver al despliegue anterior.
 
-## Access Lists
-When using multiple Access Lists on a Proxy Host or a Proxy Location, they are evaluated in a top-down order from the UI. 
-The `Satisfy Any` or `Pass Auth to Upstream` only get applied if they are set on the first Access List assigned to a proxy host/location
+1. Detenga el nginx-proxy-manager original después de copiar sus directorios de datos y Let's Encrypt.
+2. Ajuste `NPMPLUS_DATA_DIR` y monte temporalmente el antiguo directorio `/etc/letsencrypt` en `npmplus`, como indica el comentario de `compose.yaml`.
+3. Prepare `.env` y los secretos MaxMind según el [inicio rápido](#inicio-rápido).
+4. Ejecute `docker compose up -d` y espere a que finalice la migración.
+5. Retire el montaje temporal de `/etc/letsencrypt` y reaplique el stack.
+6. Revise cada host, certificado y lista de acceso. La administración usa HTTPS; si NPMplus se proxifica a sí mismo, cambie el esquema upstream de `http` a `https`.
+7. Abra y guarde los perfiles de usuario si los avatares antiguos no cargan debido a la CSP reforzada.
 
-## Contributing
-All are welcome to create pull requests for this project, but this does not mean that they will be merged, so better ask if your PR would be merged before creating one (via Discussion), typos and translations are excluded from this.
+No intente migrar una base MySQL/MariaDB/PostgreSQL a SQLite de forma automática; este flujo presupone la instalación upstream estándar compatible.
 
-# Please report issues first to this fork before reporting them to the upstream repository
-## Getting Help
-1. [Support/Questions](https://github.com/ZoeyVid/NPMplus/discussions) (preferred)
-2. [Discord](https://discord.gg/y8DhYhv427) (only in the #support-npmplus forum channel, keep other channels free from NPMplus)
-3. [Reddit](https://reddit.com/r/NPMplus) (not recommended)
-4. [Bugs](https://github.com/ZoeyVid/NPMplus/issues) (only for feature requests and reproducible bugs)
+## Soporte y upstream
+
+Este repositorio es un fork y publica sus imágenes propias exclusivamente como `docker.io/eduardoalco/npmplus`. El upstream es [ZoeyVid/NPMplus](https://github.com/ZoeyVid/NPMplus); el nombre `ZoeyVid/npmplus` usado por CrowdSec identifica su colección y no debe cambiarse por el nombre de la imagen Docker.
+
+Para ayuda funcional de NPMplus:
+
+1. [Discussions de ZoeyVid/NPMplus](https://github.com/ZoeyVid/NPMplus/discussions)
+2. [Discord](https://discord.gg/y8DhYhv427), canal `#support-npmplus`
+3. [Issues de ZoeyVid/NPMplus](https://github.com/ZoeyVid/NPMplus/issues), sólo para errores reproducibles y solicitudes de funciones
+
+Los problemas específicos de imagen, Compose o empaquetado de este fork deben reportarse primero en este fork, aportando `docker compose config`, `docker compose ps` y los logs relevantes sin secretos.

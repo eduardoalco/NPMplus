@@ -6,7 +6,7 @@ import Alert from "react-bootstrap/Alert";
 import { deleteStream, type Stream, toggleStream } from "src/api/backend";
 import { Button, HasPermission, LoadingPage } from "src/components";
 import { getDirectory, useStreams } from "src/hooks";
-import { T } from "src/locale";
+import { intl, T } from "src/locale";
 import { showDeleteConfirmModal, showHelpModal, showStreamModal } from "src/modals";
 import { MANAGE, STREAMS } from "src/modules/Permissions";
 import { showObjectSuccess } from "src/notifications";
@@ -86,18 +86,18 @@ export default function TableWrapper() {
 	};
 
 	return (
-		<div className="card mt-4">
+		<section className="card resource-panel mt-4">
 			<div className="card-status-top bg-blue" />
 			<div className="card-table">
 				<div className="card-header">
-					<div className="row w-full">
-						<div className="col">
-							<h2 className="mt-1 mb-0">
+					<div className="row w-100 g-3 align-items-center">
+						<div className="col-12 col-md">
+							<h1 className="h2 mt-1 mb-0">
 								<T id="streams" />
-							</h2>
+							</h1>
 						</div>
-						<div className="col-md-auto col-sm-12">
-							<div className="ms-auto d-flex flex-wrap btn-list">
+						<div className="col-12 col-md-auto">
+							<div className="resource-toolbar d-flex flex-wrap btn-list justify-content-md-end">
 								{data?.length ? (
 									<div className="input-group input-group-flat w-auto">
 										<span className="input-group-text input-group-text-sm">
@@ -105,6 +105,7 @@ export default function TableWrapper() {
 										</span>
 										<input
 											type="text"
+											aria-label={intl.formatMessage({ id: "search" })}
 											className="form-control form-control-sm"
 											autoComplete="off"
 											onChange={(e: any) => setSearch(e.target.value.toLowerCase().trim())}
@@ -132,6 +133,6 @@ export default function TableWrapper() {
 					{...sharedTableProps}
 				/>
 			</div>
-		</div>
+		</section>
 	);
 }

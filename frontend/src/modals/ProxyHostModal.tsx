@@ -37,6 +37,7 @@ const ProxyHostModal = EasyModal.create(({ id, isClone = false, visible, remove 
 	const [errorMsg, setErrorMsg] = useState<ReactNode | null>(null);
 	const [isSubmitting, setIsSubmitting] = useState(false);
 	const [advVisible, setAdvVisible] = useState(false);
+	const [optionsVisible, setOptionsVisible] = useState(false);
 
 	const onSubmit = (values: any, { setSubmitting }: any) => {
 		if (isSubmitting) return;
@@ -105,13 +106,13 @@ const ProxyHostModal = EasyModal.create(({ id, isClone = false, visible, remove 
 	};
 
 	return (
-		<Modal show={visible} onHide={remove}>
+		<Modal show={visible} onHide={isSubmitting ? undefined : remove} size="lg" centered>
 			{!isLoading && (error || userError) && (
 				<Alert variant="danger" className="m-3">
 					{error?.message || userError?.message || "Unknown error"}
 				</Alert>
 			)}
-			{isLoading || (userIsLoading && <Loading noLogo />)}
+			{(isLoading || userIsLoading) && <Loading noLogo />}
 			{!isLoading && !userIsLoading && data && currentUser && (
 				<Formik
 					initialValues={
@@ -297,6 +298,7 @@ const ProxyHostModal = EasyModal.create(({ id, isClone = false, visible, remove 
 																		type="text"
 																		className={`form-control ${form.errors.forwardHost && form.touched.forwardHost ? "is-invalid" : ""}`}
 																		placeholder="example.com"
+																		required={values.forwardScheme !== "empty"}
 																		{...field}
 																	/>
 																	{form.errors.forwardHost ? (
@@ -344,21 +346,89 @@ const ProxyHostModal = EasyModal.create(({ id, isClone = false, visible, remove 
 															<div className="form-label invisible">​</div>
 															<button
 																type="button"
-																className="btn p-0"
-																title="LocationConfig"
+																className={cn(
+																	"btn",
+																	"btn-sm",
+																	advVisible
+																		? "btn-primary"
+																		: "btn-outline-secondary",
+																)}
+																aria-label={intl.formatMessage({
+																	id: "proxy-host.location-config",
+																})}
+																aria-expanded={advVisible}
+																aria-controls="location-config-panel"
 																onClick={() => setAdvVisible((prev) => !prev)}
 															>
-																<IconSettings size={20} />
-																{values?.npmplusLocationConfig?.trim() ? "*" : ""}
+																<IconSettings size={18} />
+																<span className="d-none d-lg-inline ms-1">
+																	<T id="proxy-host.location-config-short" />
+																</span>
+																{values?.npmplusLocationConfig?.trim() ? " *" : ""}
 															</button>
 														</div>
 													</div>
 												</div>
-												<div className="my-3">
-													<h4 className="py-2">
-														<T id="options" />
-													</h4>
-													<div className="divide-y">
+												<Field name="npmplusLocationConfig">
+													{({ field }: any) =>
+														advVisible ? (
+															<section
+																id="location-config-panel"
+																className="form-section mb-4"
+																aria-labelledby="location-config-title"
+															>
+																<div className="form-section-heading">
+																	<h4 id="location-config-title" className="mb-1">
+																		<T id="proxy-host.location-config" />
+																	</h4>
+																	<p className="text-secondary mb-0 small">
+																		<T id="proxy-host.location-config-description" />
+																	</p>
+																</div>
+																<textarea
+																	className="form-control font-monospace"
+																	spellCheck={false}
+																	placeholder={intl.formatMessage({
+																		id: "nginx-config.placeholder",
+																	})}
+																	rows={7}
+																	{...field}
+																/>
+															</section>
+														) : null
+													}
+												</Field>
+												<section className="form-section my-3">
+													<button
+														type="button"
+														className="form-section-toggle"
+														aria-expanded={optionsVisible}
+														aria-controls="proxy-behavior-options"
+														onClick={() => setOptionsVisible((isOpen) => !isOpen)}
+													>
+														<span>
+															<strong>
+																<T id="options" />
+															</strong>
+
+															<small>
+																<T id="proxy-host.options-description" />
+															</small>
+														</span>
+
+														<span className="form-section-toggle-state">
+															<T
+																id={
+																	optionsVisible ? "action.collapse" : "action.expand"
+																}
+															/>
+														</span>
+													</button>
+
+													<div
+														id="proxy-behavior-options"
+														className={cn("divide-y", !optionsVisible && "d-none")}
+													>
 														<div style={{ display: "none" }}>
 															<label className="row" htmlFor="cachingEnabled">
 																<span className="col">
@@ -729,7 +799,7 @@ const ProxyHostModal = EasyModal.create(({ id, isClone = false, visible, remove 
 															</div>
 														)}
 													</div>
-												</div>
+												</section>
 												<div className="my-3">
 													<h4 className="py-2">
 														<T id="proxy-host.global-access-lists" />
@@ -741,30 +811,6 @@ const ProxyHostModal = EasyModal.create(({ id, isClone = false, visible, remove 
 														typeFieldName="npmplusAccessListType"
 													/>
 												</div>
-												<Field name="npmplusLocationConfig">
-													{({ field }: any) => (
-														<>
-															{advVisible && (
-																<div className="">
-																	<textarea
-																		className="form-control"
-																		spellCheck={false}
-																		placeholder={intl.formatMessage({
-																			id: "nginx-config.placeholder",
-																		})}
-																		style={{
-																			fontFamily:
-																				"ui-monospace,SFMono-Regular,SF Mono,Consolas,Liberation Mono,Menlo,monospace",
-																			borderRadius: "0.3rem",
-																			minHeight: "170px",
-																		}}
-																		{...field}
-																	/>
-																</div>
-															)}
-														</>
-													)}
-												</Field>
 											</div>
 											<div className="tab-pane" id="tab-locations" role="tabpanel">
 												<LocationsFields initialValues={data?.locations || []} />
@@ -794,7 +840,7 @@ const ProxyHostModal = EasyModal.create(({ id, isClone = false, visible, remove 
 								</div>
 							</Modal.Body>
 							<Modal.Footer>
-								<Button data-bs-dismiss="modal" onClick={remove} disabled={isSubmitting}>
+								<Button type="button" onClick={remove}>
 									<T id="cancel" />
 								</Button>
 								<HasPermission section={PROXY_HOSTS} permission={MANAGE} hideError>
@@ -802,7 +848,6 @@ const ProxyHostModal = EasyModal.create(({ id, isClone = false, visible, remove 
 										type="submit"
 										actionType="primary"
 										className="ms-auto bg-lime"
-										data-bs-dismiss="modal"
 										isLoading={isSubmitting}
 										disabled={isSubmitting}
 									>

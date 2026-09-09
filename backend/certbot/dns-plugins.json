@@ -28,7 +28,7 @@
     "dependencies": [
       "azure-core==1.41.0",
       "azure-identity==1.25.3",
-      "azure-mgmt-dns==9.0.0"
+      "azure-mgmt-dns==8.2.0"
     ],
     "full_plugin_name": "dns-azure",
     "install_args": ["--no-deps"],

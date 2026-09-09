@@ -264,6 +264,8 @@ RUN apk upgrade --no-cache -a && \
     \
     python3 -m venv /usr/local && \
     pip install --no-cache-dir --upgrade pip certbot==5.8.0 josepy==2.2.0 && \
+    python -c 'import certbot, josepy' && \
+    certbot --version && \
     \
     wget -q https://raw.githubusercontent.com/tomwassenberg/certbot-ocsp-fetcher/"$COF_VER"/certbot-ocsp-fetcher -O /usr/local/bin/certbot-ocsp-fetcher.sh && \
     echo "60148ed2ffef2f1354427d3e080400d008132f8e5fb014f721f5986f438dd621  /usr/local/bin/certbot-ocsp-fetcher.sh" | sha256sum -c - && \

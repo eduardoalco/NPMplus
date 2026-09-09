@@ -86,6 +86,7 @@ export default function Table({ data, isFetching, isFiltered, onEdit, onDelete, 
 						<button
 							type="button"
 							className="btn dropdown-toggle btn-action btn-sm px-1"
+							aria-label={intl.formatMessage({ id: "action.menu" })}
 							data-bs-boundary="viewport"
 							data-bs-toggle="dropdown"
 						>

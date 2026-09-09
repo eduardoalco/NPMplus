@@ -4,13 +4,13 @@ import {
 	IconDeviceDesktop,
 	IconExternalLink,
 	IconHome,
-	IconLock,
 	IconSettings,
 	IconShield,
 	IconUser,
 } from "@tabler/icons-react";
 import cn from "clsx";
 import React from "react";
+import { useLocation } from "react-router";
 import { HasPermission, NavLink } from "src/components";
 import { useUser } from "src/hooks";
 import { T } from "src/locale";
@@ -19,6 +19,7 @@ import {
 	ADMIN,
 	CERTIFICATES,
 	DEAD_HOSTS,
+	hasPermission,
 	type MANAGE,
 	PROXY_HOSTS,
 	REDIRECTION_HOSTS,
@@ -45,7 +46,7 @@ const menuItems: MenuItem[] = [
 	},
 	{
 		icon: IconDeviceDesktop,
-		label: "hosts",
+		label: "navigation.routing",
 		items: [
 			{
 				to: "/nginx/proxy",
@@ -74,42 +75,38 @@ const menuItems: MenuItem[] = [
 		],
 	},
 	{
-		to: "/access",
-		icon: IconLock,
-		label: "access-lists",
-		permissionSection: ACCESS_LISTS,
-		permission: VIEW,
-	},
-	{
-		to: "/certificates",
 		icon: IconShield,
-		label: "certificates",
-		permissionSection: CERTIFICATES,
-		permission: VIEW,
+		label: "navigation.security",
+		items: [
+			{
+				to: "/access",
+				label: "access-lists",
+				permissionSection: ACCESS_LISTS,
+				permission: VIEW,
+			},
+			{
+				to: "/certificates",
+				label: "certificates",
+				permissionSection: CERTIFICATES,
+				permission: VIEW,
+			},
+		],
 	},
 	{
-		to: "/users",
-		icon: IconUser,
-		label: "users",
-		permissionSection: ADMIN,
-	},
-	{
-		to: "/audit-log",
-		icon: IconBook,
-		label: "auditlogs",
-		permissionSection: ADMIN,
-	},
-	{
-		to: "/settings",
 		icon: IconSettings,
-		label: "settings",
+		label: "navigation.administration",
 		permissionSection: ADMIN,
+		items: [
+			{ to: "/users", icon: IconUser, label: "users", permissionSection: ADMIN },
+			{ to: "/audit-log", icon: IconBook, label: "auditlogs", permissionSection: ADMIN },
+			{ to: "/settings", icon: IconSettings, label: "settings", permissionSection: ADMIN },
+		],
 	},
 ];
 
-const getMenuItem = (item: MenuItem, onClick?: () => void) => {
+const getMenuItem = (item: MenuItem, pathname: string, onClick?: () => void) => {
 	if (item.items && item.items.length > 0) {
-		return getMenuDropown(item, onClick);
+		return getMenuDropown(item, pathname, onClick);
 	}
 
 	return (
@@ -134,8 +131,9 @@ const getMenuItem = (item: MenuItem, onClick?: () => void) => {
 	);
 };
 
-const getMenuDropown = (item: MenuItem, onClick?: () => void) => {
-	const cns = cn("nav-item", "dropdown");
+const getMenuDropown = (item: MenuItem, pathname: string, onClick?: () => void) => {
+	const isActive = item.items?.some((subitem) => subitem.to && pathname.startsWith(subitem.to));
+	const cns = cn("nav-item", "dropdown", isActive && "active");
 	return (
 		<HasPermission
 			key={`item-${item.label}`}
@@ -146,12 +144,12 @@ const getMenuDropown = (item: MenuItem, onClick?: () => void) => {
 			<li className={cns}>
 				<button
 					type="button"
-					className="nav-link dropdown-toggle"
+					className={cn("nav-link", "dropdown-toggle", isActive && "active")}
 					data-bs-toggle="dropdown"
 					aria-expanded="false"
 				>
 					<span className="nav-link-icon d-md-none d-lg-inline-block">
-						<IconDeviceDesktop height={24} width={24} />
+						{item.icon && React.createElement(item.icon, { height: 24, width: 24 })}
 					</span>
 					<span className="nav-link-title">
 						<T id={item.label} />
@@ -178,6 +176,14 @@ const getMenuDropown = (item: MenuItem, onClick?: () => void) => {
 
 export function SiteMenu() {
 	const { data: user } = useUser("me");
+	const { pathname } = useLocation();
+	const canAccess = (item: MenuItem) =>
+		!item.permissionSection ||
+		hasPermission(item.permissionSection, item.permission || VIEW, user?.permissions, user?.roles);
+	const visibleMenuItems = menuItems
+		.filter(canAccess)
+		.map((item) => (item.items ? { ...item, items: item.items.filter(canAccess) } : item))
+		.filter((item) => !item.items || item.items.length > 0);
 
 	const closeMenu = () =>
 		setTimeout(() => {
@@ -189,7 +195,7 @@ export function SiteMenu() {
 		}, 300);
 
 	return (
-		<header className="navbar-expand-md">
+		<nav className="navbar-expand-md" aria-label="Primary navigation">
 			<div className="collapse navbar-collapse" id="navbar-menu">
 				<div className="navbar">
 					<div className="container-xl">
@@ -197,7 +203,7 @@ export function SiteMenu() {
 							<div className="col">
 								<ul className="navbar-nav">
 									{[
-										...menuItems,
+										...visibleMenuItems,
 										...(user?.goaccess
 											? ([
 													{
@@ -208,13 +214,13 @@ export function SiteMenu() {
 													},
 												] as MenuItem[])
 											: []),
-									].map((item) => getMenuItem(item, closeMenu))}
+									].map((item) => getMenuItem(item, pathname, closeMenu))}
 								</ul>
 							</div>
 						</div>
 					</div>
 				</div>
 			</div>
-		</header>
+		</nav>
 	);
 }
