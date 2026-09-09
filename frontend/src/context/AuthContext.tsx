@@ -1,8 +1,9 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
+import { createContext, type ReactNode, useCallback, useContext, useEffect, useState } from "react";
 import { useIntervalWhen } from "rooks";
 import { deleteToken, getToken, refreshToken, revokeSessions, type TokenResponse, verifyTotp } from "src/api/backend";
 import AuthStore from "src/modules/AuthStore";
+import { deleteCookie } from "src/modules/cookies";
 
 // Context
 interface AuthContextType {
@@ -11,8 +12,8 @@ interface AuthContextType {
 	login: (username: string, password: string) => Promise<void>;
 	submitTotp: (code: string) => Promise<void>;
 	cancelTotp: () => void;
-	logout: () => void;
-	logoutEverywhere: () => void;
+	logout: () => Promise<void>;
+	logoutEverywhere: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -36,11 +37,17 @@ function AuthProvider({ children, tokenRefreshInterval = 5 * 60 * 1000 }: Props)
 		() => getCookie("__Host-npmplus_oidc_totp_required") === "true",
 	);
 
-	const handleTokenUpdate = (response: TokenResponse) => {
+	const handleTokenUpdate = useCallback((response: TokenResponse) => {
 		AuthStore.set(response);
 		setAuthenticated(true);
 		setTotpChallenge(false);
-	};
+	}, []);
+
+	const clearSession = useCallback(() => {
+		AuthStore.clear();
+		setAuthenticated(false);
+		queryClient.clear();
+	}, [queryClient]);
 
 	const login = async (identity: string, secret: string) => {
 		const response = await getToken(identity, secret);
@@ -64,33 +71,39 @@ function AuthProvider({ children, tokenRefreshInterval = 5 * 60 * 1000 }: Props)
 	};
 
 	const logout = async () => {
-		await deleteToken();
-		AuthStore.clear();
-		setAuthenticated(false);
-		queryClient.clear();
+		try {
+			await deleteToken();
+		} finally {
+			clearSession();
+		}
 	};
 
 	const logoutEverywhere = async () => {
-		await revokeSessions("me");
-		AuthStore.clear();
-		setAuthenticated(false);
-		queryClient.clear();
+		try {
+			await revokeSessions("me");
+		} finally {
+			clearSession();
+		}
 	};
 
-	const refresh = async (reload = true) => {
-		const response = await refreshToken(reload);
-		handleTokenUpdate(response);
-	};
+	const refresh = useCallback(
+		async (reload = true) => {
+			const response = await refreshToken(reload);
+			handleTokenUpdate(response);
+		},
+		[handleTokenUpdate],
+	);
 
 	useEffect(() => {
-		if (!authenticated) {
-			if (totpChallenge) {
-				window.cookieStore.delete("__Host-npmplus_oidc_totp_required");
-				return;
-			}
-			refresh(false).catch(() => {});
+		if (authenticated) {
+			return;
 		}
-	});
+		if (totpChallenge) {
+			void deleteCookie("__Host-npmplus_oidc_totp_required");
+			return;
+		}
+		refresh(false).catch(() => {});
+	}, [authenticated, refresh, totpChallenge]);
 
 	useIntervalWhen(
 		() => {

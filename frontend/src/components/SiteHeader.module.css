@@ -1,8 +1,37 @@
 .logo {
-	font-size: 1.1rem;
-	font-weight: 500;
+	display: inline-grid;
+	place-items: center;
+	width: 2.5rem;
+	height: 2.5rem;
+	margin-right: 0.7rem;
+	border: 1px solid rgba(45, 212, 191, 0.28);
+	border-radius: 0.8rem;
+	background: linear-gradient(145deg, rgba(45, 212, 191, 0.16), rgba(13, 148, 136, 0.04));
+	box-shadow:
+		inset 0 1px rgba(255, 255, 255, 0.25),
+		0 8px 20px rgba(13, 148, 136, 0.12);
 
 	img {
-		margin-right: 0.8rem;
+		width: 1.85rem;
+		height: 1.85rem;
 	}
+}
+
+.skipLink {
+	position: fixed;
+	top: 0.75rem;
+	left: 0.75rem;
+	z-index: 2000;
+	padding: 0.65rem 0.9rem;
+	border-radius: 0.55rem;
+	background: var(--npmplus-accent);
+	color: white;
+	font-weight: 700;
+	transform: translateY(-160%);
+	transition: transform 160ms ease;
+}
+
+.skipLink:focus {
+	color: white;
+	transform: translateY(0);
 }

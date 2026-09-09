@@ -1,10 +1,12 @@
 name: npmplus
+
 services:
   npmplus:
     container_name: npmplus
-    restart: unless-stopped
-    image: docker.io/zoeyvid/npmplus:latest # or ghcr.io/zoeyvid/npmplus:latest
+    image: docker.io/eduardoalco/npmplus:latest
     pull_policy: always
+    restart: unless-stopped
+    stop_grace_period: 30s
     network_mode: host
     cap_drop:
       - ALL
@@ -30,11 +32,11 @@ services:
 #      - 2a10:50c0::bad1:ff # Public AdGuard DNS
 #      - 2a10:50c0::bad2:ff # Public AdGuard DNS
     volumes:
-      - "/opt/npmplus:/data"
+      - "${NPMPLUS_DATA_DIR:-/opt/npmplus}:/data"
 #      - "/var/www:/var/www" # optional, if you want to use NPMplus directly as a webserver for html/php
 #      - "/path/to/old/npm/letsencrypt/folder:/etc/letsencrypt" # Only needed for initial migration from original nginx-proxy-manager to this fork, remove after migration
     environment:
-      - "TZ=your-timezone" # set timezone, required, set it to one of the values from the "TZ identifier" https://en.wikipedia.org/wiki/List_of_tz_database_time_zones#List
+      - "TZ=${TZ:-Etc/UTC}"
 #      - "ACME_EMAIL=your-email" # email address to use for acme, required for zerossl and google public ca
 #      - "ACME_SERVER=https://dv.acme-v02.api.pki.goog/directory (google public ca) / https://acme.zerossl.com/v2/DV90 (zerossl)" # acme server used when requesting/renewing certs using certbot, default: https://acme-v02.api.letsencrypt.org/directory (letsencrypt)
 #      - "ACME_EAB_KID=123456789abcdef" # Key Identifier for External Account Binding for the acme server, not supported by letsencrypt, optional for zerossl (Login on their site => Developer), but required for google public ca: https://cloud.google.com/certificate-manager/docs/public-ca-tutorial?hl=de#request-key-hmac
@@ -58,7 +60,7 @@ services:
 #      - "DEFAULT_CERT_ID=1" # ID of cert to use instead of dummycerts, default 0/unset/dummycerts
 #      - "HTTP_PORT=8080" # tcp port to use for http traffic, changing this may break certbot http challenge, default 80
 #      - "HTTPS_PORT=8443" # udp and tcp port to use for https traffic, changing this may break certbot http challenge, default 443
-#      - "DISABLE_HTTP=true" # prevents nginx from listening on port 80, default false
+      - "DISABLE_HTTP=${DISABLE_HTTP:-false}" # set true when enabling the caddy profile
 #      - "LISTEN_PROXY_PROTOCOL=true" # should listeners of http(s) hosts (proxy/redirect/dead and default) use proxy protocol instead of http(s)? default false, overrides DISABLE_H3_QUIC, LISTEN_PROXY_PROTOCOL_HTTP and LISTEN_PROXY_PROTOCOL_HTTPS to true
 #      - "LISTEN_PROXY_PROTOCOL_HTTP=true" # should listeners of http hosts (proxy/redirect/dead and default) use proxy protocol instead of http? default false
 #      - "LISTEN_PROXY_PROTOCOL_HTTPS=true" # should listeners of https hosts (proxy/redirect/dead and default) use proxy protocol instead of https? default false, overrides DISABLE_H3_QUIC to true
@@ -73,13 +75,13 @@ services:
 #      - "NGINX_TRUST_SECPR1=false" # enables secp521r1:secp384r1:secp256r1 ecdh curves, default true, disable if all your clients support X25519MLKEM768 or x25519
 #      - "NGINX_TRUST_RSA_PKCS1=true" # enables rsa_pkcs1_sha512:rsa_pkcs1_sha384:rsa_pkcs1_sha256 sigalgs, default false, enable if your use a RSA key and your client doesn't support RSA-PSS sigalgs
 #      - "DISABLE_NGINX_BEAUTIFIER=true" # disables nginxbeautifier, useful when it fails parsing non-standard custom/advanced configs, default false
-#      - "LOGROTATE=true" # Enables writing http access logs to /opt/npmplus/nginx/logs/access.log, stream access logs to /opt/npmplus/nginx/logs/stream.log and enables daily logrotation, default false
+      - "LOGROTATE=${LOGROTATE:-false}" # must be true when enabling the crowdsec profile
 #      - "LOGROTATIONS=7" # Set how often the access.log should be rotated until it is deleted, default 3
 #      - "TRUST_IP=10.0.0.0/8 192.168.1.5" # Space separated list of reverse proxy IPs/subnets to trust for the X-Forwarded-For header, so nginx will see the real client IPs, default empty
 #      - "TRUST_CLOUDFLARE=true" # Enables fetching/whitelisting IPs from cloudflare, so nginx will see the real client IPs, default false
 #      - "CERTBOT_RUN_INTERVAL=72" # Set how many hours should be between certbot trying to renew your certs if needed, default 3
 #      - "ECH_ROTATION_INTERVAL=3" # Set how many hours should be between the runs of your ech cron script, default 1
-#      - "GOA=true" # Enables goaccess (and overrides LOGROTATE to true), served under /goaccess of the NPMplus web UI, only reachable for logged in admins, default false --- if you download the GeoLite2-Country.mmdb, GeoLite2-City.mmdb AND GeoLite2-ASN.mmdb file from MaxMind and place them in /opt/npmplus/goaccess/geoip it will automatically enable GeoIP in goaccess after restarting NPMplus (no need to change GOACLA below), you may also enable the geoipupdate container below (please change the timezone)
+      - "GOA=${GOA:-false}" # enables GoAccess; use the geoip profile to keep its databases current
 #      - "GOACLA=--agent-list --real-os --double-decode --anonymize-ip --anonymize-level=2 --keep-last=7 --with-output-resolver --no-query-string" # Arguments that should be passed to goaccess, default: --agent-list --real-os --double-decode --anonymize-ip --anonymize-level=1 --keep-last=30 --with-output-resolver --no-query-string
 #      - "PHP83=true" # Activate PHP83, default false, supported, but not recommended, you should prefer to use a dedicated php-fpm container
 #      - "PHP83_APKS=php83-curl php83-openssl" # Add php extensions, also enables PHP83, see available packages here: https://pkgs.alpinelinux.org/packages?branch=v3.21&repo=community&arch=x86_64&name=php83-*, default none, requires PHP83
@@ -95,7 +97,7 @@ services:
 #      - "COOKIE_SECRET=some-random-string" # by default a new secret to encrypt/decrypt cookies is used after each restart, to keep cookies valid after restarts you can set a static secret here
 #      - "ENABLE_PRERUN=true" # see readme, default off
 #      - "NGINX_LOAD_NJS_MODULE=true" # loads the njs module, requires manual configuration, default false
-#      - "NGINX_LOAD_GEOIP2_MODULE=true" # loads the geoip2 module, requires manual configuration, default false
+      - "NGINX_LOAD_GEOIP2_MODULE=${NGINX_LOAD_GEOIP2_MODULE:-false}" # enable for custom GeoIP2 nginx rules
 #      - "NGINX_LOAD_LDAP_MODULE=true" # loads the ldap module, requires manual configuration, default false
 #      - "NGINX_LOAD_NTLM_MODULE=true" # loads the ntlm module, requires manual configuration, default false
 #      - "NGINX_LOAD_VHOST_TRAFFIC_STATUS_MODULE=true" # loads the virtual host traffic status module, requires manual configuration, default false
@@ -107,72 +109,153 @@ services:
 #      - "OIDC_REQUIRE_VERIFIED_EMAIL=false" # requires the email sent by the OIDC Provider to be marked as verified, default true
 #      - "OIDC_DISABLE_PASSWORD=true" # disables plain email/password login, default false
 #      - "OIDC_SKIP_MFA=true" # skips the second factor after a successful OIDC login, default false
-#      - "AUTH_REQUEST_ANUBIS_UPSTREAM=http://127.0.0.1:8923" # scheme + ip/hostname/domain (+ port) to internal anubis, without path, this is unrelated to OIDC
+      - "AUTH_REQUEST_ANUBIS_UPSTREAM=${AUTH_REQUEST_ANUBIS_UPSTREAM:-}" # set to http://127.0.0.1:8923 with the anubis profile
 #      - "AUTH_REQUEST_TINYAUTH_UPSTREAM=http://127.0.0.1:3000" # scheme + ip/hostname/domain (+ port) to internal tinyauth, without path, this is unrelated to OIDC
 #      - "AUTH_REQUEST_OAUTH2PROXY_UPSTREAM=http://127.0.0.1:4180" # scheme + ip/hostname/domain (+ port) to internal oauth2proxy, without path, this is unrelated to OIDC
 #      - "AUTH_REQUEST_VOIDAUTH_UPSTREAM=http://127.0.0.1:3000" # scheme + ip/hostname/domain (+ port) to internal oauth2proxy, without path, this is unrelated to OIDC
 #      - "AUTH_REQUEST_AUTHELIA_UPSTREAM=http://127.0.0.1:9091" # scheme + ip/hostname/domain (+ port) to internal authelia, without path, this is unrelated to OIDC
 #      - "AUTH_REQUEST_AUTHENTIK_UPSTREAM=https://127.0.0.1:9443" # scheme + ip/hostname/domain (+ port) to internal authentik, without path, currently only works with embedded outpost, this is unrelated to OIDC
 
-# This can be used to enable crowdsec, see README for a guide
-#  crowdsec:
-#    container_name: crowdsec
-#    restart: unless-stopped
-#    image: docker.io/crowdsecurity/crowdsec:latest
-#    pull_policy: always
-#    network_mode: bridge
-#    ports:
-#      - "127.0.0.1:7422:7422"
-#      - "127.0.0.1:8080:8080"
-#    environment:
-#      - "TZ=your-timezone" # needs to be changed
-#      - "USE_WAL=true"
-#      - "COLLECTIONS=ZoeyVid/npmplus"
-#    volumes:
-#      - "/opt/crowdsec/conf:/etc/crowdsec"
-#      - "/opt/crowdsec/data:/var/lib/crowdsec/data"
-#      - "/opt/npmplus/nginx/logs:/opt/npmplus/nginx/logs:ro"
+  # Detects attacks in NPMplus logs and exposes LAPI/AppSec only on host loopback.
+  crowdsec:
+    profiles: [crowdsec]
+    container_name: crowdsec
+    image: docker.io/crowdsecurity/crowdsec:v1.8.1@sha256:0f2523fa61ef507f15d953045cface490cc880670c62f2755ced17524107f71a
+    pull_policy: always
+    restart: unless-stopped
+    depends_on:
+      npmplus:
+        condition: service_started
+    ports:
+      - "127.0.0.1:${CROWDSEC_APPSEC_PORT:-7422}:7422"
+      - "127.0.0.1:${CROWDSEC_LAPI_PORT:-8080}:8080"
+    environment:
+      TZ: "${TZ:-Etc/UTC}"
+      USE_WAL: "true"
+      COLLECTIONS: "ZoeyVid/npmplus"
+    volumes:
+      - "${CROWDSEC_CONFIG_DIR:-/opt/crowdsec/conf}:/etc/crowdsec"
+      - "${CROWDSEC_DATA_DIR:-/opt/crowdsec/data}:/var/lib/crowdsec/data"
+      - "${NPMPLUS_DATA_DIR:-/opt/npmplus}/nginx/logs:/opt/npmplus/nginx/logs:ro"
+    configs:
+      - source: crowdsec_acquis
+        target: /etc/crowdsec/acquis.d/npmplus.yaml
+    networks:
+      - auxiliary
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: [CMD, cscli, lapi, status]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
-# See the readme on how to configure your proxy hosts to use anubis and what needs to be changes in the botPolicy to make it work
-#  anubis:
-#    container_name: npmplus-anubis
-#    restart: unless-stopped
-#    image: ghcr.io/techarohq/anubis:latest
-#    pull_policy: always
-#    network_mode: bridge
-#    ports:
-#      - "127.0.0.1:8923:8923"
-#    environment:
-#      - "TZ=your-timezone" # needs to be changed
-#      - "TARGET= " # important: this needs to be and stay one single space
-#      - "POLICY_FNAME=/etc/botPolicies.yaml" # required so the status codes can be changed
-#    volumes:
-#      - "/opt/anubis.yaml:/etc/botPolicies.yaml:ro" # since a file is mounted here, you first need to create it before deploying this container, you can download the default file from here: https://raw.githubusercontent.com/TecharoHQ/anubis/refs/heads/main/data/botPolicies.yaml
+  # Runs Anubis in subrequest mode for NPMplus auth_request integrations.
+  anubis:
+    profiles: [anubis]
+    container_name: npmplus-anubis
+    image: ghcr.io/techarohq/anubis:v1.27.0@sha256:8828275668b7bc675679f100970f9714f731388fbbf66ae94de8aca952e3fc4a
+    pull_policy: always
+    restart: unless-stopped
+    depends_on:
+      npmplus:
+        condition: service_started
+    ports:
+      - "127.0.0.1:${ANUBIS_PORT:-8923}:8923"
+    environment:
+      TZ: "${TZ:-Etc/UTC}"
+      BIND: ":8923"
+      METRICS_BIND: ":9090"
+      TARGET: " " # whitespace intentionally enables Anubis subrequest mode
+      POLICY_FNAME: /etc/botPolicies.yaml
+    configs:
+      - source: anubis_policy
+        target: /etc/botPolicies.yaml
+        mode: 0444
+    networks:
+      - auxiliary
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: [CMD, anubis, --healthcheck]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
 
-# This can be used with GOA=true to keep the geoip database updated, environment variables must be configured
-#  geoipupdate:
-#    container_name: npmplus-geoipupdate
-#    restart: unless-stopped
-#    image: ghcr.io/maxmind/geoipupdate:latest
-#    pull_policy: always
-#    network_mode: bridge
-#    environment:
-#      - "TZ=your-timezone" # needs to be changed
-#      - "GEOIPUPDATE_EDITION_IDS=GeoLite2-Country GeoLite2-City GeoLite2-ASN"
-#      - "GEOIPUPDATE_ACCOUNT_ID=<your-account-id>" # needs to be changed
-#      - "GEOIPUPDATE_LICENSE_KEY=<your-license-key>" # needs to be changed
-#      - "GEOIPUPDATE_FREQUENCY=24"
-#    volumes:
-#      - "/opt/npmplus/goaccess/geoip:/usr/share/GeoIP"
+  # Keeps the GeoIP databases shared with NPMplus up to date.
+  geoipupdate:
+    profiles: [geoip]
+    container_name: npmplus-geoipupdate
+    image: ghcr.io/maxmind/geoipupdate:v8.0.0@sha256:51e70dd6f16cd3e4d845ac02d09940b10772a75b9d741427d235a78570923c1d
+    pull_policy: always
+    restart: unless-stopped
+    depends_on:
+      npmplus:
+        condition: service_started
+    environment:
+      TZ: "${TZ:-Etc/UTC}"
+      GEOIPUPDATE_EDITION_IDS: "GeoLite2-Country GeoLite2-City GeoLite2-ASN"
+      GEOIPUPDATE_ACCOUNT_ID_FILE: /run/secrets/maxmind_account_id
+      GEOIPUPDATE_LICENSE_KEY_FILE: /run/secrets/maxmind_license_key
+      GEOIPUPDATE_FREQUENCY: "${GEOIPUPDATE_FREQUENCY:-24}"
+    secrets:
+      - maxmind_account_id
+      - maxmind_license_key
+    volumes:
+      - "${NPMPLUS_DATA_DIR:-/opt/npmplus}/goaccess/geoip:/usr/share/GeoIP"
+    networks:
+      - auxiliary
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
 
-# This can be used with DISABLE_HTTP=true, to force HTTPS redirects for every host
-#  npmplus-caddy:
-#    container_name: npmplus-caddy
-#    restart: unless-stopped
-#    image: docker.io/zoeyvid/npmplus:caddy
-#    pull_policy: always
-#    network_mode: bridge
-#    ports:
-#      - "80:80"
-#    environment:
-#      - "TZ=your-timezone"
+  # Owns public port 80 and redirects every request to HTTPS.
+  npmplus-caddy:
+    profiles: [caddy]
+    container_name: npmplus-caddy
+    image: docker.io/eduardoalco/npmplus:caddy
+    pull_policy: always
+    restart: unless-stopped
+    depends_on:
+      npmplus:
+        condition: service_healthy
+    ports:
+      - "${CADDY_HTTP_PORT:-80}:80"
+    environment:
+      TZ: "${TZ:-Etc/UTC}"
+    networks:
+      - auxiliary
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: [CMD-SHELL, "wget -S -O /dev/null http://127.0.0.1/ 2>&1 | grep -q 'HTTP/1.1 301'"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+networks:
+  auxiliary:
+    name: "${NPMPLUS_AUXILIARY_NETWORK:-npmplus-auxiliary}"
+    driver: bridge
+
+configs:
+  crowdsec_acquis:
+    file: ./deployment/crowdsec/acquis.yaml
+  anubis_policy:
+    file: ./deployment/anubis/botPolicies.yaml
+
+secrets:
+  maxmind_account_id:
+    file: "${MAXMIND_ACCOUNT_ID_SECRET_FILE:-./secrets/maxmind_account_id}"
+  maxmind_license_key:
+    file: "${MAXMIND_LICENSE_KEY_SECRET_FILE:-./secrets/maxmind_license_key}"

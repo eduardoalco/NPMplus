@@ -4,6 +4,8 @@ If you don't need the web GUI of NPMplus, you may also have a look at caddy: htt
 
 - [Compatibility (to Upstream)](#compatibility-to-upstream)
 - [Quick Setup](#quick-setup)
+- [Architecture](#architecture)
+- [Production deployment](#production-deployment)
 - [Migration from upstream/vanilla nginx-proxy-manager](#migration-from-upstreamvanilla-nginx-proxy-manager)
 
 **Note: this fork is distributed under the GNU Affero General Public License version 3 or any later version. It is based on the MIT licensed [nginx-proxy-manager](https://github.com/NginxProxyManager/nginx-proxy-manager).** <br>
@@ -52,13 +54,147 @@ If you don't need the web GUI of NPMplus, you may also have a look at caddy: htt
 1. Install Docker and Docker Compose (podman or docker rootless may also work)
 - [Docker Install documentation](https://docs.docker.com/engine/install)
 - [Docker Compose Install documentation](https://docs.docker.com/compose/install/linux)
-2. Download this [compose.yaml](https://raw.githubusercontent.com/ZoeyVid/NPMplus/refs/heads/develop/compose.yaml) (or use its content as a portainer stack)
+2. Download this [compose.yaml](https://raw.githubusercontent.com/eduardoalco/NPMplus/refs/heads/develop/compose.yaml) (or use its content as a portainer stack)
 3. Adjust TZ to match your Timezone and maybe adjust other env options to your needs
 4. Start NPMplus by running (or deploy your portainer stack)
 ```bash
 docker compose up -d
 ```
 5. Log in to the Admin UI: When your docker container is running, connect to the admin interface using `https://` on port `81`.
+
+## Architecture
+
+NPMplus is distributed as one main container. `dinit` supervises the Node.js API, the custom nginx build, Certbot jobs, log rotation, and optional GoAccess/PHP-FPM processes. The React/Vite frontend is built into the image and served by nginx. Runtime state, the SQLite database, certificates, generated nginx configuration, logs, and custom files live below `/data`, which the Compose file persists at `/opt/npmplus` by default.
+
+The main service uses the Linux host network so it can preserve client addresses, expose TCP 80/443, UDP 443 for HTTP/3, and reach loopback-only integrations. Its default listeners are:
+
+| Listener | Purpose |
+| --- | --- |
+| `80/tcp` | HTTP, redirects, and ACME HTTP-01 challenges |
+| `443/tcp` | HTTPS proxy hosts and streams |
+| `443/udp` | HTTP/3/QUIC |
+| `81/tcp` | HTTPS administration UI and API |
+
+Optional services use the named `npmplus-auxiliary` bridge network. CrowdSec LAPI/AppSec and Anubis are published only on `127.0.0.1`, so the host-networked NPMplus container can reach them without exposing those APIs externally. GeoIP Update shares only the GeoIP database directory. Caddy is the exception: when enabled, it intentionally owns public TCP port 80 and redirects every request to HTTPS.
+
+SQLite is the supported and recommended database. External MySQL/MariaDB/PostgreSQL deployments are not included because they add operational complexity without an advantage for NPMplus and are not officially supported by this fork.
+
+## Production deployment
+
+### Prepare the host
+
+Use a Linux host with Docker Engine and the current Docker Compose plugin. Ensure TCP ports 80, 81, and 443 plus UDP port 443 are available and allowed by the firewall. Then prepare the configuration:
+
+```bash
+curl -O https://raw.githubusercontent.com/eduardoalco/NPMplus/refs/heads/develop/compose.yaml
+curl -O https://raw.githubusercontent.com/eduardoalco/NPMplus/refs/heads/develop/.env.example
+mkdir -p deployment/crowdsec deployment/anubis
+curl -o deployment/crowdsec/acquis.yaml https://raw.githubusercontent.com/eduardoalco/NPMplus/refs/heads/develop/deployment/crowdsec/acquis.yaml
+curl -o deployment/anubis/botPolicies.yaml https://raw.githubusercontent.com/eduardoalco/NPMplus/refs/heads/develop/deployment/anubis/botPolicies.yaml
+cp .env.example .env
+chmod 600 .env
+```
+
+A repository checkout already contains the versioned `deployment/` configs. They are harmless when no optional profile is active and required by the CrowdSec and Anubis profiles.
+
+Edit `.env` before starting. `TZ` and `NPMPLUS_DATA_DIR` are the main settings. The default data paths are designed for host backups:
+
+| Data | Default host path | Required backup |
+| --- | --- | --- |
+| NPMplus state, SQLite, certificates, logs | `/opt/npmplus` | Yes |
+| CrowdSec configuration and credentials | `/opt/crowdsec/conf` | If CrowdSec is enabled |
+| CrowdSec database | `/opt/crowdsec/data` | If CrowdSec is enabled |
+| Local Compose secrets | `./secrets` | If GeoIP Update is enabled |
+
+Validate and start the core service:
+
+```bash
+docker compose config --quiet
+docker compose pull
+docker compose up -d
+docker compose ps
+```
+
+The image contains a healthcheck for the API. Do not place the admin UI directly on the public internet without an appropriate firewall, VPN, or access policy.
+
+### Optional profiles
+
+The base command starts only NPMplus. Optional services are activated explicitly:
+
+| Profile | Service | Prerequisite |
+| --- | --- | --- |
+| `crowdsec` | CrowdSec Security Engine, LAPI, and AppSec listener | Set `LOGROTATE=true` |
+| `anubis` | Anubis bot challenge in subrequest mode | Set `AUTH_REQUEST_ANUBIS_UPSTREAM=http://127.0.0.1:8923` |
+| `geoip` | Periodic MaxMind GeoLite2 updates | Create both MaxMind secret files |
+| `caddy` | Strict catch-all HTTP-to-HTTPS redirect | Set `DISABLE_HTTP=true` so port 80 is free |
+
+Run one or several profiles:
+
+```bash
+docker compose --profile crowdsec up -d
+docker compose --profile anubis --profile geoip up -d
+docker compose --profile crowdsec --profile anubis --profile geoip --profile caddy up -d
+```
+
+Profiles do not change NPMplus settings automatically. Put the prerequisites in `.env` before deployment. This keeps the base installation backward compatible and prevents enabling logging, third-party services, or public listeners unexpectedly.
+
+#### CrowdSec and AppSec
+
+The profile installs the `ZoeyVid/npmplus` collection, reads NPMplus logs through the read-only acquisition in `deployment/crowdsec/acquis.yaml`, and binds LAPI/AppSec to host loopback. After the first start, create the NPMplus bouncer credential:
+
+```bash
+docker compose exec crowdsec cscli bouncers add npmplus
+```
+
+Copy the generated key into `/opt/npmplus/crowdsec/crowdsec.conf`, set `ENABLED` to `true`, and redeploy NPMplus. The Security Engine detects decisions but does not enforce them until the NPMplus bouncer is enabled. See the dedicated [CrowdSec](#crowdsec) guide below for policy and privacy details.
+
+#### Anubis
+
+The profile uses Anubis `v1.27.0` and the versioned policy in `deployment/anubis/botPolicies.yaml`. That policy keeps the upstream defaults but returns `401` for challenges and `403` for denials, as required by nginx `auth_request`. After setting the upstream in `.env`, select `Anubis` in each proxy host that should use it. No custom nginx location is needed.
+
+#### GeoIP Update
+
+Create a free MaxMind account and place the account ID and license key in separate files. Do not commit them:
+
+```bash
+install -d -m 700 secrets
+printf '%s' 'YOUR_ACCOUNT_ID' > secrets/maxmind_account_id
+printf '%s' 'YOUR_LICENSE_KEY' > secrets/maxmind_license_key
+chmod 600 secrets/maxmind_account_id secrets/maxmind_license_key
+docker compose --profile geoip up -d
+```
+
+Set `GOA=true` to use the databases in GoAccess, or set `NGINX_LOAD_GEOIP2_MODULE=true` and add the custom nginx rules described in the [geoblocking example](#geoblocking-example-mainly-community-support). Compose secrets are mounted files; with local Compose they are not an encrypted secret store, so protect the host files and backups.
+
+#### Strict HTTP redirect with Caddy
+
+Set `DISABLE_HTTP=true`, then start the profile:
+
+```bash
+docker compose --profile caddy up -d
+```
+
+NPMplus continues to own HTTPS and the admin UI. Caddy owns TCP port 80 and performs only a catch-all permanent redirect. Because NPMplus no longer serves HTTP, ACME HTTP-01 challenges may not work; use a DNS challenge where required.
+
+### Updates, rollback, and backups
+
+The external auxiliary images use pinned versions and digests while the first-party NPMplus channels retain their existing rolling tags. Review release notes and update pinned references deliberately. Repeat only the profiles used by your deployment; for example:
+
+```bash
+docker compose --profile crowdsec --profile anubis pull
+docker compose --profile crowdsec --profile anubis up -d --remove-orphans
+```
+
+For reproducible rollback, record or locally pin the resolved digest of the rolling `npmplus:latest` and `npmplus:caddy` images before updating. For a consistent SQLite backup, stop NPMplus before copying its data directory and make `DATA_DIR` match `NPMPLUS_DATA_DIR` from `.env`:
+
+```bash
+DATA_DIR=/opt/npmplus
+docker compose stop npmplus
+tar -C "$(dirname "$DATA_DIR")" -czf "npmplus-backup-$(date +%F).tar.gz" "$(basename "$DATA_DIR")"
+docker compose up -d
+```
+
+Also back up the CrowdSec directories and local secret files when those profiles are in use. Test restoration on a separate host before relying on a backup. To roll back, restore the data backup and redeploy the recorded image references.
 
 ## Migration from upstream/vanilla nginx-proxy-manager
 - **NOTE: Migrating back to the original version is not possible.** Please make a **backup** before migrating, so you have the option to revert if needed

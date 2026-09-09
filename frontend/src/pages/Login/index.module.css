@@ -1,3 +1,37 @@
 .logo {
 	width: 200px;
+	filter: drop-shadow(0 10px 22px rgba(13, 148, 136, 0.16));
+}
+
+:global(.page-center) {
+	position: relative;
+	overflow: hidden;
+}
+
+:global(.page-center)::before,
+:global(.page-center)::after {
+	position: absolute;
+	z-index: -1;
+	width: 22rem;
+	height: 22rem;
+	border-radius: 50%;
+	content: "";
+	filter: blur(2px);
+}
+
+:global(.page-center)::before {
+	top: -10rem;
+	right: -7rem;
+	background: radial-gradient(circle, rgba(45, 212, 191, 0.18), transparent 68%);
+}
+
+:global(.page-center)::after {
+	bottom: -12rem;
+	left: -8rem;
+	background: radial-gradient(circle, rgba(13, 148, 136, 0.13), transparent 70%);
+}
+
+:global(.page-center .card) {
+	border-top: 3px solid var(--npmplus-accent);
+	box-shadow: 0 28px 70px rgba(15, 42, 42, 0.14);
 }
