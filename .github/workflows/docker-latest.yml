@@ -31,7 +31,7 @@ jobs:
       - name: Log in to Docker Hub
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
-          username: ${{ secrets.DOCKER_USER }}
+          username: eduardoalco
           password: ${{ secrets.DOCKER_PAT }}
       - name: Set up Docker Build Cloud
         uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
@@ -47,7 +47,7 @@ jobs:
         with:
           context: .
           platforms: ${{ matrix.platform }}
-          tags: ${{ secrets.DOCKER_USER }}/npmplus:latest-${{ matrix.suffix }}
+          tags: eduardoalco/npmplus:latest-${{ matrix.suffix }}
           outputs: type=registry
           build-args: |
             FLAGS=${{ matrix.flags }}
@@ -62,7 +62,7 @@ jobs:
       - name: Log in to Docker Hub
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
-          username: ${{ secrets.DOCKER_USER }}
+          username: eduardoalco
           password: ${{ secrets.DOCKER_PAT }}
       - name: Set up Docker Build Cloud
         uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
@@ -72,9 +72,9 @@ jobs:
       - name: Publish multi-platform images
         run: |
           docker buildx imagetools create \
-            --tag ${{ secrets.DOCKER_USER }}/npmplus:beta \
-            --tag ${{ secrets.DOCKER_USER }}/npmplus:latest \
-            --tag ${{ secrets.DOCKER_USER }}/npmplus:${{ inputs.tag }} \
-            --tag ${{ secrets.DOCKER_USER }}/nginx-proxy-manager:latest \
-            ${{ secrets.DOCKER_USER }}/npmplus:latest-amd64 \
-            ${{ secrets.DOCKER_USER }}/npmplus:latest-arm64
+            --tag eduardoalco/npmplus:beta \
+            --tag eduardoalco/npmplus:latest \
+            --tag eduardoalco/npmplus:${{ inputs.tag }} \
+            --tag eduardoalco/nginx-proxy-manager:latest \
+            eduardoalco/npmplus:latest-amd64 \
+            eduardoalco/npmplus:latest-arm64
