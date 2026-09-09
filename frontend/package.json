@@ -4,7 +4,18 @@
 	"description": "A beautiful interface for creating Nginx endpoints",
 	"author": "Jamie Curnow <jc@jc21.com> and ZoeyVid <zoeyvid@zvcdn.de>",
 	"license": "AGPL-3.0 (and MIT)",
+	"private": true,
 	"type": "module",
+	"engines": {
+		"node": ">=22.19.0"
+	},
+	"scripts": {
+		"build": "tsc -b && vite build",
+		"check": "biome ci . && tsc -b && vite build",
+		"dev": "vite",
+		"lint": "biome check .",
+		"typecheck": "tsc -b"
+	},
 	"dependencies": {
 		"@ebay/nice-modal-react": "1.2.13",
 		"@tabler/core": "1.5.0",
@@ -29,7 +40,7 @@
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.5.12",
-		"@types/node": "25.9.5",
+		"@types/node": "26.5.0",
 		"@types/react": "19.2.18",
 		"@types/react-dom": "19.2.7",
 		"@vitejs/plugin-react": "6.1.1",

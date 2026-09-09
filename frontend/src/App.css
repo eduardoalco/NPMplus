@@ -9,6 +9,124 @@
 	color-scheme: dark;
 }
 
+:root {
+	--npmplus-accent: #0d9488;
+	--npmplus-accent-bright: #2dd4bf;
+	--npmplus-ink: #102a2a;
+	--npmplus-radius: 0.85rem;
+	--npmplus-shadow: 0 18px 45px rgba(15, 42, 42, 0.08);
+	--tblr-primary: var(--npmplus-accent);
+	--tblr-primary-rgb: 13, 148, 136;
+}
+
+body {
+	background-color: #f4f7f6;
+	background-image:
+		radial-gradient(circle at 8% 0%, rgba(45, 212, 191, 0.12), transparent 30rem),
+		linear-gradient(rgba(15, 118, 110, 0.025) 1px, transparent 1px),
+		linear-gradient(90deg, rgba(15, 118, 110, 0.025) 1px, transparent 1px);
+	background-size:
+		auto,
+		28px 28px,
+		28px 28px;
+	font-family: "Avenir Next", "Segoe UI Variable", "Segoe UI", sans-serif;
+}
+
+[data-bs-theme="dark"] body {
+	background-color: #0c1517;
+	background-image:
+		radial-gradient(circle at 8% 0%, rgba(20, 184, 166, 0.13), transparent 32rem),
+		linear-gradient(rgba(94, 234, 212, 0.025) 1px, transparent 1px),
+		linear-gradient(90deg, rgba(94, 234, 212, 0.025) 1px, transparent 1px);
+}
+
+.navbar {
+	border-color: color-mix(in srgb, var(--tblr-border-color) 75%, var(--npmplus-accent) 25%);
+	background: color-mix(in srgb, var(--tblr-bg-surface) 91%, transparent);
+	backdrop-filter: blur(18px) saturate(130%);
+}
+
+.card,
+.modal-content,
+.dropdown-menu {
+	border-color: color-mix(in srgb, var(--tblr-border-color) 78%, var(--npmplus-accent) 22%);
+	border-radius: var(--npmplus-radius);
+	box-shadow: var(--npmplus-shadow);
+}
+
+.card {
+	transition:
+		border-color 180ms ease,
+		box-shadow 180ms ease,
+		transform 180ms ease;
+}
+
+.card-link:hover {
+	border-color: color-mix(in srgb, var(--npmplus-accent) 55%, var(--tblr-border-color));
+	box-shadow: 0 22px 50px rgba(13, 148, 136, 0.14);
+	transform: translateY(-3px);
+}
+
+.btn {
+	border-radius: 0.65rem;
+	font-weight: 650;
+	letter-spacing: 0.01em;
+	transition:
+		box-shadow 160ms ease,
+		transform 160ms ease;
+}
+
+.btn:hover:not(:disabled) {
+	box-shadow: 0 8px 20px rgba(13, 148, 136, 0.2);
+	transform: translateY(-1px);
+}
+
+.form-control,
+.form-select {
+	border-radius: 0.65rem;
+	transition:
+		border-color 160ms ease,
+		box-shadow 160ms ease;
+}
+
+.form-control:focus,
+.form-select:focus {
+	border-color: var(--npmplus-accent);
+	box-shadow: 0 0 0 0.2rem rgba(13, 148, 136, 0.14);
+}
+
+.table {
+	--tblr-table-border-color: color-mix(in srgb, var(--tblr-border-color) 82%, var(--npmplus-accent) 18%);
+}
+
+.table thead th {
+	color: var(--tblr-secondary-color);
+	font-size: 0.72rem;
+	font-weight: 700;
+	letter-spacing: 0.07em;
+	text-transform: uppercase;
+}
+
+.avatar {
+	box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+}
+
+h1,
+h2,
+h3 {
+	color: color-mix(in srgb, var(--tblr-body-color) 90%, var(--npmplus-accent));
+	letter-spacing: -0.025em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		scroll-behavior: auto !important;
+		transition-duration: 0.01ms !important;
+	}
+}
+
 .modal-backdrop {
 	--tblr-backdrop-opacity: 0.8 !important;
 }

@@ -4,8 +4,17 @@
 	"description": "A beautiful interface for creating Nginx endpoints",
 	"author": "Jamie Curnow <jc@jc21.com> and ZoeyVid <zoeyvid@zvcdn.de>",
 	"license": "AGPL-3.0 (and MIT)",
+	"private": true,
 	"main": "index.js",
 	"type": "module",
+	"engines": {
+		"node": ">=22.19.0"
+	},
+	"scripts": {
+		"check": "biome ci . && node validate-schema.js",
+		"lint": "biome check .",
+		"validate:schema": "node validate-schema.js"
+	},
 	"dependencies": {
 		"@apidevtools/json-schema-ref-parser": "16.0.2",
 		"ajv": "8.20.0",

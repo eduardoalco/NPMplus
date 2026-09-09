@@ -1,10 +1,9 @@
-import { QueryClient } from "@tanstack/react-query";
 import queryString, { type StringifiableRecord } from "query-string";
 import AuthStore from "src/modules/AuthStore";
+import queryClient from "src/queryClient";
 import { camelizeKeys, decamelize, decamelizeKeys } from "./caseConvert";
 import { deleteToken } from "./deleteToken";
 
-const queryClient = new QueryClient();
 const contentTypeHeader = "Content-Type";
 
 interface BuildUrlArgs {
@@ -80,14 +79,21 @@ export async function get(args: GetArgs, abortController?: AbortController) {
 }
 
 export async function download({ url, params }: GetArgs, filename = "download.file") {
-	const res = await fetch(buildUrl({ url, params }));
-	const bl = await res.blob();
-	const u = window.URL.createObjectURL(bl);
-	const a = document.createElement("a");
-	a.href = u;
-	a.download = filename;
-	a.click();
-	window.URL.revokeObjectURL(u);
+	const response = await fetch(buildUrl({ url, params }));
+	if (!response.ok) {
+		await processResponse(response);
+	}
+
+	const blob = await response.blob();
+	const objectUrl = window.URL.createObjectURL(blob);
+	try {
+		const anchor = document.createElement("a");
+		anchor.href = objectUrl;
+		anchor.download = filename;
+		anchor.click();
+	} finally {
+		window.URL.revokeObjectURL(objectUrl);
+	}
 }
 
 interface PostArgs {

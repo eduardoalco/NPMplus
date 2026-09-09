@@ -13,6 +13,9 @@ export function SiteHeader() {
 
 	return (
 		<header className="navbar navbar-expand-md d-print-none">
+			<a className={styles.skipLink} href="#main-content">
+				Skip to content
+			</a>
 			<div className="container-xl">
 				<button
 					className="navbar-toggler"
@@ -128,7 +131,7 @@ export function SiteHeader() {
 									className="dropdown-item"
 									onClick={(e) => {
 										e.preventDefault();
-										logout();
+										void logout();
 									}}
 								>
 									<IconLogout width={18} />
@@ -139,7 +142,7 @@ export function SiteHeader() {
 									className="dropdown-item"
 									onClick={(e) => {
 										e.preventDefault();
-										logoutEverywhere();
+										void logoutEverywhere();
 									}}
 								>
 									<IconDevicesX width={18} />

@@ -6,6 +6,7 @@ import { Button, LocalePicker, Page, ThemeSwitcher } from "src/components";
 import { useAuthState } from "src/context";
 import { useHealth } from "src/hooks";
 import { intl, T } from "src/locale";
+import { deleteCookie } from "src/modules/cookies";
 import { validateEmail, validateString } from "src/modules/Validations";
 import styles from "./index.module.css";
 
@@ -29,7 +30,7 @@ function TotpForm() {
 
 	useEffect(() => {
 		codeRef.current?.focus();
-	});
+	}, []);
 
 	return (
 		<>
@@ -119,22 +120,20 @@ function PasswordForm() {
 	};
 
 	useEffect(() => {
-		if (health.data?.password === false) {
-			const getCookie = (name: string): string | undefined => {
-				const value = `; ${document.cookie}`;
-				const parts = value.split(`; ${name}=`);
-				if (parts.length === 2) return parts.pop()?.split(";").shift();
-				return undefined;
-			};
+		if (health.data?.password === undefined) {
+			return;
+		}
 
-			if (getCookie("__Host-npmplus_oidc_no_redirect") !== "true") {
-				redirectToOIDC();
-			}
-		} else {
+		const cookies = `; ${document.cookie}`;
+		const noRedirect = cookies.split("; __Host-npmplus_oidc_no_redirect=").pop()?.split(";").shift();
+		void deleteCookie("__Host-npmplus_oidc_no_redirect");
+
+		if (health.data.password === false && noRedirect !== "true") {
+			window.location.href = "/api/oidc";
+		} else if (health.data.password) {
 			emailRef.current?.focus();
 		}
-		window.cookieStore.delete("__Host-npmplus_oidc_no_redirect");
-	});
+	}, [health.data?.password]);
 
 	return (
 		<>
