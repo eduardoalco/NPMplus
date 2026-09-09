@@ -31,7 +31,7 @@ jobs:
       - name: Log in to Docker Hub
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
-          username: ${{ vars.DOCKER_USER }}
+          username: ${{ secrets.DOCKER_USER }}
           password: ${{ secrets.DOCKER_PAT }}
       - name: Set up Docker Build Cloud
         uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
@@ -47,7 +47,7 @@ jobs:
         with:
           context: .
           platforms: ${{ matrix.platform }}
-          tags: ${{ vars.DOCKER_USER }}/npmplus:beta-${{ matrix.suffix }}
+          tags: ${{ secrets.DOCKER_USER }}/npmplus:beta-${{ matrix.suffix }}
           outputs: type=registry
           build-args: |
             FLAGS=${{ matrix.flags }}
@@ -62,7 +62,7 @@ jobs:
       - name: Log in to Docker Hub
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
-          username: ${{ vars.DOCKER_USER }}
+          username: ${{ secrets.DOCKER_USER }}
           password: ${{ secrets.DOCKER_PAT }}
       - name: Set up Docker Build Cloud
         uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
@@ -72,7 +72,7 @@ jobs:
       - name: Publish multi-platform images
         run: |
           docker buildx imagetools create \
-            --tag ${{ vars.DOCKER_USER }}/npmplus:beta \
-            --tag ${{ vars.DOCKER_USER }}/npmplus:${{ inputs.tag }} \
-            ${{ vars.DOCKER_USER }}/npmplus:beta-amd64 \
-            ${{ vars.DOCKER_USER }}/npmplus:beta-arm64
+            --tag ${{ secrets.DOCKER_USER }}/npmplus:beta \
+            --tag ${{ secrets.DOCKER_USER }}/npmplus:${{ inputs.tag }} \
+            ${{ secrets.DOCKER_USER }}/npmplus:beta-amd64 \
+            ${{ secrets.DOCKER_USER }}/npmplus:beta-arm64
