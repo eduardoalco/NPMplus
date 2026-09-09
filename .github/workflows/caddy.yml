@@ -28,7 +28,7 @@ jobs:
       - name: Log in to Docker Hub
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
-          username: ${{ vars.DOCKER_USER }}
+          username: ${{ secrets.DOCKER_USER }}
           password: ${{ secrets.DOCKER_PAT }}
       - name: Set up Docker Build Cloud
         uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
@@ -40,5 +40,5 @@ jobs:
         with:
           context: caddy
           platforms: linux/amd64,linux/arm64
-          tags: ${{ vars.DOCKER_USER }}/npmplus:caddy
+          tags: ${{ secrets.DOCKER_USER }}/npmplus:caddy
           outputs: ${{ github.event_name == 'pull_request' && 'type=cacheonly' || 'type=registry' }}
