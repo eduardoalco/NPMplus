@@ -1,5 +1,6 @@
 import { IconDevicesX, IconLock, IconLogout, IconShieldLock, IconUser } from "@tabler/icons-react";
-import { LocalePicker, NavLink, ThemeSwitcher } from "src/components";
+import { Link } from "react-router";
+import { LocalePicker, ThemeSwitcher } from "src/components";
 import { useAuthState } from "src/context";
 import { useUser } from "src/hooks";
 import { T } from "src/locale";
@@ -29,18 +30,18 @@ export function SiteHeader() {
 					<span className="navbar-toggler-icon" />
 				</button>
 				<div className="navbar-brand navbar-brand-autodark pe-0 pe-md-3">
-					<NavLink to="/">
+					<Link to="/" className="d-flex align-items-center gap-2 text-reset text-decoration-none">
 						<div className={styles.logo}>
 							<img
 								src="/images/logo-no-text.svg"
 								width={40}
 								height={40}
 								className="navbar-brand-image"
-								alt="Logo"
+								alt=""
 							/>
 						</div>
-						NPMplus
-					</NavLink>
+						<span>NPMplus</span>
+					</Link>
 				</div>
 				<div className="navbar-nav flex-row order-md-last">
 					<div className="d-none d-md-flex">
@@ -53,9 +54,9 @@ export function SiteHeader() {
 					</div>
 					<div className="nav-item d-md-flex">
 						<div className="nav-item dropdown">
-							<a
-								href="/"
-								className="nav-link d-flex lh-1"
+							<button
+								type="button"
+								className="nav-link d-flex lh-1 border-0 bg-transparent"
 								data-bs-toggle="dropdown"
 								aria-label="Open user menu"
 							>
@@ -71,7 +72,7 @@ export function SiteHeader() {
 										<T id={isAdmin ? "role.admin" : "role.standard-user"} />
 									</div>
 								</div>
-							</a>
+							</button>
 							<div className="dropdown-menu dropdown-menu-end dropdown-menu-arrow">
 								<div className="d-md-none">
 									{/* biome-ignore lint/a11y/noStaticElementInteractions lint/a11y/useKeyWithClickEvents lint/a11y/noNoninteractiveElementInteractions: onClick only stops propagation so clicking the user info does not close the dropdown. */}
@@ -92,62 +93,57 @@ export function SiteHeader() {
 									</div>
 									<div className="dropdown-divider" />
 								</div>
-								<a
-									href="?"
+								<button
+									type="button"
 									className="dropdown-item"
-									onClick={(e) => {
-										e.preventDefault();
+									onClick={() => {
 										showUserModal("me");
 									}}
 								>
 									<IconUser width={18} />
 									<T id="user.edit-profile" />
-								</a>
-								<a
-									href="?"
+								</button>
+								<button
+									type="button"
 									className="dropdown-item"
-									onClick={(e) => {
-										e.preventDefault();
+									onClick={() => {
 										showChangePasswordModal("me");
 									}}
 								>
 									<IconLock width={18} />
 									<T id="user.change-password" />
-								</a>
-								<a
-									href="?"
+								</button>
+								<button
+									type="button"
 									className="dropdown-item"
-									onClick={(e) => {
-										e.preventDefault();
+									onClick={() => {
 										showMfaModal("me");
 									}}
 								>
 									<IconShieldLock width={18} />
 									<T id="user.mfa" />
-								</a>
+								</button>
 								<div className="dropdown-divider" />
-								<a
-									href="?"
+								<button
+									type="button"
 									className="dropdown-item"
-									onClick={(e) => {
-										e.preventDefault();
+									onClick={() => {
 										void logout();
 									}}
 								>
 									<IconLogout width={18} />
 									<T id="user.logout" />
-								</a>
-								<a
-									href="?"
+								</button>
+								<button
+									type="button"
 									className="dropdown-item"
-									onClick={(e) => {
-										e.preventDefault();
+									onClick={() => {
 										void logoutEverywhere();
 									}}
 								>
 									<IconDevicesX width={18} />
 									<T id="user.logout-everywhere" />
-								</a>
+								</button>
 							</div>
 						</div>
 					</div>

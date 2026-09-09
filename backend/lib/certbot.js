@@ -3,8 +3,10 @@ import { certbot as logger } from "../logger.js";
 import errs from "./error.js";
 import utils from "./utils.js";
 
+const certbotRuntimePackages = ["certbot==5.8.0", "josepy==2.2.0"];
+
 /**
- * Installs a cerbot plugin given the key for the object from
+ * Installs a certbot plugin given the key for the object from
  * ../certbot/dns-plugins.json
  *
  * @param   {string}  pluginKey
@@ -21,10 +23,16 @@ const installPlugin = async (pluginKey) => {
 	logger.start(`Installing ${pluginKey}...`);
 
 	if (plugin.dependencies) {
-		await utils.execFile("pip", [...installArgs, ...plugin.dependencies]);
+		await utils.execFile("pip", [...installArgs, ...certbotRuntimePackages, ...plugin.dependencies]);
 	}
 
-	const result = await utils.execFile("pip", [...installArgs, ...(plugin.install_args || []), plugin.package_name]);
+	const result = await utils.execFile("pip", [
+		...installArgs,
+		...(plugin.install_args || []),
+		...certbotRuntimePackages,
+		plugin.package_name,
+	]);
+	await utils.execFile("python", ["-c", "import certbot.main, josepy"]);
 
 	logger.complete(`Installed ${pluginKey}`);
 	return result;

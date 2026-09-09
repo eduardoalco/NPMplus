@@ -269,13 +269,12 @@ const PermissionsModal = EasyModal.create(({ id, visible, remove }: Props) => {
 								)}
 							</Modal.Body>
 							<Modal.Footer>
-								<Button data-bs-dismiss="modal" onClick={remove} disabled={isSubmitting}>
+								<Button type="button" onClick={remove}>
 									<T id="cancel" />
 								</Button>
 								<Button
 									type="submit"
 									className="ms-auto btn-orange"
-									data-bs-dismiss="modal"
 									isLoading={isSubmitting}
 									disabled={isSubmitting}
 								>

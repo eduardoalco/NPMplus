@@ -60,7 +60,7 @@ services:
 #      - "DEFAULT_CERT_ID=1" # ID of cert to use instead of dummycerts, default 0/unset/dummycerts
 #      - "HTTP_PORT=8080" # tcp port to use for http traffic, changing this may break certbot http challenge, default 80
 #      - "HTTPS_PORT=8443" # udp and tcp port to use for https traffic, changing this may break certbot http challenge, default 443
-      - "DISABLE_HTTP=${DISABLE_HTTP:-false}" # set true when enabling the caddy profile
+      - "DISABLE_HTTP=${DISABLE_HTTP:-true}" # Caddy owns public port 80 in the default stack
 #      - "LISTEN_PROXY_PROTOCOL=true" # should listeners of http(s) hosts (proxy/redirect/dead and default) use proxy protocol instead of http(s)? default false, overrides DISABLE_H3_QUIC, LISTEN_PROXY_PROTOCOL_HTTP and LISTEN_PROXY_PROTOCOL_HTTPS to true
 #      - "LISTEN_PROXY_PROTOCOL_HTTP=true" # should listeners of http hosts (proxy/redirect/dead and default) use proxy protocol instead of http? default false
 #      - "LISTEN_PROXY_PROTOCOL_HTTPS=true" # should listeners of https hosts (proxy/redirect/dead and default) use proxy protocol instead of https? default false, overrides DISABLE_H3_QUIC to true
@@ -75,13 +75,13 @@ services:
 #      - "NGINX_TRUST_SECPR1=false" # enables secp521r1:secp384r1:secp256r1 ecdh curves, default true, disable if all your clients support X25519MLKEM768 or x25519
 #      - "NGINX_TRUST_RSA_PKCS1=true" # enables rsa_pkcs1_sha512:rsa_pkcs1_sha384:rsa_pkcs1_sha256 sigalgs, default false, enable if your use a RSA key and your client doesn't support RSA-PSS sigalgs
 #      - "DISABLE_NGINX_BEAUTIFIER=true" # disables nginxbeautifier, useful when it fails parsing non-standard custom/advanced configs, default false
-      - "LOGROTATE=${LOGROTATE:-false}" # must be true when enabling the crowdsec profile
+      - "LOGROTATE=${LOGROTATE:-true}" # CrowdSec consumes the persisted access logs
 #      - "LOGROTATIONS=7" # Set how often the access.log should be rotated until it is deleted, default 3
 #      - "TRUST_IP=10.0.0.0/8 192.168.1.5" # Space separated list of reverse proxy IPs/subnets to trust for the X-Forwarded-For header, so nginx will see the real client IPs, default empty
 #      - "TRUST_CLOUDFLARE=true" # Enables fetching/whitelisting IPs from cloudflare, so nginx will see the real client IPs, default false
 #      - "CERTBOT_RUN_INTERVAL=72" # Set how many hours should be between certbot trying to renew your certs if needed, default 3
 #      - "ECH_ROTATION_INTERVAL=3" # Set how many hours should be between the runs of your ech cron script, default 1
-      - "GOA=${GOA:-false}" # enables GoAccess; use the geoip profile to keep its databases current
+      - "GOA=${GOA:-false}" # enables GoAccess; the bundled geoipupdate service keeps its databases current
 #      - "GOACLA=--agent-list --real-os --double-decode --anonymize-ip --anonymize-level=2 --keep-last=7 --with-output-resolver --no-query-string" # Arguments that should be passed to goaccess, default: --agent-list --real-os --double-decode --anonymize-ip --anonymize-level=1 --keep-last=30 --with-output-resolver --no-query-string
 #      - "PHP83=true" # Activate PHP83, default false, supported, but not recommended, you should prefer to use a dedicated php-fpm container
 #      - "PHP83_APKS=php83-curl php83-openssl" # Add php extensions, also enables PHP83, see available packages here: https://pkgs.alpinelinux.org/packages?branch=v3.21&repo=community&arch=x86_64&name=php83-*, default none, requires PHP83
@@ -109,7 +109,7 @@ services:
 #      - "OIDC_REQUIRE_VERIFIED_EMAIL=false" # requires the email sent by the OIDC Provider to be marked as verified, default true
 #      - "OIDC_DISABLE_PASSWORD=true" # disables plain email/password login, default false
 #      - "OIDC_SKIP_MFA=true" # skips the second factor after a successful OIDC login, default false
-      - "AUTH_REQUEST_ANUBIS_UPSTREAM=${AUTH_REQUEST_ANUBIS_UPSTREAM:-}" # set to http://127.0.0.1:8923 with the anubis profile
+      - "AUTH_REQUEST_ANUBIS_UPSTREAM=${AUTH_REQUEST_ANUBIS_UPSTREAM:-http://127.0.0.1:8923}" # Anubis is part of the default stack
 #      - "AUTH_REQUEST_TINYAUTH_UPSTREAM=http://127.0.0.1:3000" # scheme + ip/hostname/domain (+ port) to internal tinyauth, without path, this is unrelated to OIDC
 #      - "AUTH_REQUEST_OAUTH2PROXY_UPSTREAM=http://127.0.0.1:4180" # scheme + ip/hostname/domain (+ port) to internal oauth2proxy, without path, this is unrelated to OIDC
 #      - "AUTH_REQUEST_VOIDAUTH_UPSTREAM=http://127.0.0.1:3000" # scheme + ip/hostname/domain (+ port) to internal oauth2proxy, without path, this is unrelated to OIDC
@@ -118,7 +118,6 @@ services:
 
   # Detects attacks in NPMplus logs and exposes LAPI/AppSec only on host loopback.
   crowdsec:
-    profiles: [crowdsec]
     container_name: crowdsec
     image: docker.io/crowdsecurity/crowdsec:v1.8.1@sha256:0f2523fa61ef507f15d953045cface490cc880670c62f2755ced17524107f71a
     pull_policy: always
@@ -153,7 +152,6 @@ services:
 
   # Runs Anubis in subrequest mode for NPMplus auth_request integrations.
   anubis:
-    profiles: [anubis]
     container_name: npmplus-anubis
     image: ghcr.io/techarohq/anubis:v1.27.0@sha256:8828275668b7bc675679f100970f9714f731388fbbf66ae94de8aca952e3fc4a
     pull_policy: always
@@ -188,7 +186,6 @@ services:
 
   # Keeps the GeoIP databases shared with NPMplus up to date.
   geoipupdate:
-    profiles: [geoip]
     container_name: npmplus-geoipupdate
     image: ghcr.io/maxmind/geoipupdate:v8.0.0@sha256:51e70dd6f16cd3e4d845ac02d09940b10772a75b9d741427d235a78570923c1d
     pull_policy: always
@@ -216,7 +213,6 @@ services:
 
   # Owns public port 80 and redirects every request to HTTPS.
   npmplus-caddy:
-    profiles: [caddy]
     container_name: npmplus-caddy
     image: docker.io/eduardoalco/npmplus:caddy
     pull_policy: always

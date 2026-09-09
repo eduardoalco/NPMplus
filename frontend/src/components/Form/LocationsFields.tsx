@@ -279,6 +279,7 @@ export function LocationsFields({ initialValues, name = "locations" }: Props) {
 									<span className="input-group-text">Location</span>
 									<select
 										id={`locationType-${item.uiKey}`}
+										aria-label={intl.formatMessage({ id: "proxy-host.location-match-type" })}
 										className="form-select w-auto flex-grow-0"
 										value={item.locationType}
 										onChange={(e) => handleChange(idx, "locationType", e.target.value)}
@@ -291,8 +292,10 @@ export function LocationsFields({ initialValues, name = "locations" }: Props) {
 										<option value="^~ ">^~</option>
 									</select>
 									<input
+										id={`location-path-${item.uiKey}`}
 										type="text"
 										className="form-control"
+										aria-label={intl.formatMessage({ id: "proxy-host.location-path" })}
 										placeholder="/path"
 										autoComplete="off"
 										value={item.path}
@@ -303,12 +306,18 @@ export function LocationsFields({ initialValues, name = "locations" }: Props) {
 							<div className="col-md-2 text-end">
 								<button
 									type="button"
-									className="btn p-0"
-									title="Advanced"
+									className={cn(
+										"btn",
+										"btn-sm",
+										advVisible.includes(item.uiKey) ? "btn-primary" : "btn-outline-secondary",
+									)}
+									aria-label={intl.formatMessage({ id: "nginx-config.label" })}
+									aria-expanded={advVisible.includes(item.uiKey)}
+									aria-controls={`location-advanced-${item.uiKey}`}
 									onClick={() => toggle(item.uiKey, advVisible, setAdvVisible)}
 								>
-									<IconSettings size={20} />
-									{item?.advancedConfig?.trim() ? "*" : ""}
+									<IconSettings size={18} />
+									{item?.advancedConfig?.trim() ? " *" : ""}
 								</button>
 							</div>
 						</div>
@@ -622,10 +631,14 @@ export function LocationsFields({ initialValues, name = "locations" }: Props) {
 								/>
 							</div>
 						</div>
-						{advVisible.includes(item.uiKey) && (
-							<div className="">
+						{isOpen(item) && advVisible.includes(item.uiKey) && (
+							<div id={`location-advanced-${item.uiKey}`} className="form-section mt-3">
+								<label className="form-label" htmlFor={`location-advanced-config-${item.uiKey}`}>
+									<T id="nginx-config.label" />
+								</label>
 								<textarea
-									className="form-control"
+									id={`location-advanced-config-${item.uiKey}`}
+									className="form-control font-monospace"
 									spellCheck={false}
 									placeholder={intl.formatMessage({ id: "nginx-config.placeholder" })}
 									value={item.advancedConfig}

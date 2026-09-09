@@ -72,9 +72,7 @@ jobs:
       - name: Publish multi-platform images
         run: |
           docker buildx imagetools create \
-            --tag eduardoalco/npmplus:beta \
             --tag eduardoalco/npmplus:latest \
             --tag eduardoalco/npmplus:${{ inputs.tag }} \
-            --tag eduardoalco/nginx-proxy-manager:latest \
             eduardoalco/npmplus:latest-amd64 \
             eduardoalco/npmplus:latest-arm64
