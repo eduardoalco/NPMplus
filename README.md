@@ -54,7 +54,7 @@ If you don't need the web GUI of NPMplus, you may also have a look at caddy: htt
 1. Install Docker and Docker Compose (podman or docker rootless may also work)
 - [Docker Install documentation](https://docs.docker.com/engine/install)
 - [Docker Compose Install documentation](https://docs.docker.com/compose/install/linux)
-2. Download this [compose.yaml](https://raw.githubusercontent.com/ZoeyVid/NPMplus/refs/heads/develop/compose.yaml) (or use its content as a portainer stack)
+2. Download this [compose.yaml](https://raw.githubusercontent.com/eduardoalco/NPMplus/refs/heads/develop/compose.yaml) (or use its content as a portainer stack)
 3. Adjust TZ to match your Timezone and maybe adjust other env options to your needs
 4. Start NPMplus by running (or deploy your portainer stack)
 ```bash
@@ -86,11 +86,11 @@ SQLite is the supported and recommended database. External MySQL/MariaDB/Postgre
 Use a Linux host with Docker Engine and the current Docker Compose plugin. Ensure TCP ports 80, 81, and 443 plus UDP port 443 are available and allowed by the firewall. Then prepare the configuration:
 
 ```bash
-curl -O https://raw.githubusercontent.com/ZoeyVid/NPMplus/refs/heads/develop/compose.yaml
-curl -O https://raw.githubusercontent.com/ZoeyVid/NPMplus/refs/heads/develop/.env.example
+curl -O https://raw.githubusercontent.com/eduardoalco/NPMplus/refs/heads/develop/compose.yaml
+curl -O https://raw.githubusercontent.com/eduardoalco/NPMplus/refs/heads/develop/.env.example
 mkdir -p deployment/crowdsec deployment/anubis
-curl -o deployment/crowdsec/acquis.yaml https://raw.githubusercontent.com/ZoeyVid/NPMplus/refs/heads/develop/deployment/crowdsec/acquis.yaml
-curl -o deployment/anubis/botPolicies.yaml https://raw.githubusercontent.com/ZoeyVid/NPMplus/refs/heads/develop/deployment/anubis/botPolicies.yaml
+curl -o deployment/crowdsec/acquis.yaml https://raw.githubusercontent.com/eduardoalco/NPMplus/refs/heads/develop/deployment/crowdsec/acquis.yaml
+curl -o deployment/anubis/botPolicies.yaml https://raw.githubusercontent.com/eduardoalco/NPMplus/refs/heads/develop/deployment/anubis/botPolicies.yaml
 cp .env.example .env
 chmod 600 .env
 ```
